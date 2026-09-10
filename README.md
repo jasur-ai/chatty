@@ -57,11 +57,33 @@ Web app (React PWA)  ⇄  REST + WebSocket  ⇄  FastAPI server  ⇄  MTProto (T
 | Faza | Holat |
 |---|---|
 | 1. Yadro: login, chatlar, xabarlar, read-receipts, WS, R2 | ✅ tayyor |
-| 2. Chat funksiyalari: media, push-xabarnomalar, story | ⏳ navbatda |
-| 3. Avto-javob + so'kinish filtri | ⏳ navbatda |
-| 4. Admin panel + VIP | ⏳ navbatda |
-| 5. Lotus AI 0.0.1 | ⏳ navbatda |
-| 6. Pink rejim + final UI | ⏳ navbatda |
+| 2. Chat funksiyalari: media, push-xabarnomalar, story, bot-persona | ✅ tayyor |
+| 3. Avto-javob + so'kinish filtri (warn/block/hide) | ✅ tayyor |
+| 4. Admin panel + VIP + adminlar boshqaruvi | ✅ tayyor |
+| 5. Lotus AI 0.0.1 (offline + LLM, ru/uz/en, eslatmalar) + Admin AI hisobot | ✅ tayyor |
+| 6. Pink rejim + final UI | ✅ tayyor |
+| 7. Musiqa taklifi (banner + reaksiya) | ✅ tayyor |
+| 8. 20 ta VIP funksiya | ⏳ tasdiqlash kutilmoqda ([docs/VIP_FEATURES.md](docs/VIP_FEATURES.md)) |
+
+## Muhim sozlamalar
+
+Login ishlashi uchun `.env` da quyidagilar **majburiy**:
+
+- `TG_API_ID` / `TG_API_HASH` — my.telegram.org (bo'sh bo'lsa "TG_API_ID sozlanishi shart" xatosi)
+- `TG_BOT_TOKEN` — xabarnoma boti (@BotFather'dan) — push-xabarnoma va "Javob yozish" tugmasi uchun
+- `OWNER_ID=8004724563`, `ADMIN_IDS=8442078631`
+- `REPORT_INTERVAL_HOURS=2` — Admin AI hisobot oraliq (1/2/4/6/8)
+- `LOTUS_LLM_URL` / `LOTUS_LLM_KEY` — (ixtiyoriy) real AI uchun; bo'sh bo'lsa Lotus offline rejimda ishlaydi
+
+## Xususiyatlar
+
+- **Avto-javob**: yoqish + matn (tayyor takliflar) + "belgilangan odamlar" ro'yxati
+- **So'kinish filtri**: 1-2 marta ogohlantirish, 3-marta blok; guruhda xabarlar yashiriladi
+- **Bot-persona**: nom/rasm default akkaunt bilan bir xil, keyin alohida o'zgartiriladi; story joylash
+- **Admin**: barcha akkauntlar kuzatuvi, VIP (tasdiqlash bilan), admin qo'shish/olib tashlash,
+  hisobot oraliq sozlash, hisobotlar tarixi
+- **Lotus 0.0.1**: yordamchi AI (salom/yordam/eslatma/til/hisobot buyruqlari), suzuvchi oyna
+- **Pink rejim**: id `8442078631` ulanganda butun tizim "pick me pink" rejimga o'tadi
 
 ## Deploy (Render)
 

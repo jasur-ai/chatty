@@ -1,9 +1,10 @@
-"""Admin API — owner/admin uchun: akkauntlar kuzatuvi, VIP boshqaruvi."""
+"""Admin API — owner/admin uchun: akkauntlar kuzatuvi, VIP, adminlar boshqaruvi."""
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
-from ..db import Account, AppUser, Dialog, Message, get_session
+from ..db import Account, Admin, AdminReport, AppUser, Dialog, Message, get_session
+from ..scheduler import REPORT_INTERVALS, report_interval_hours
 from ..tg.sync import serialize_account
 from .deps import require_account, require_admin
 
@@ -13,6 +14,14 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 class VipIn(BaseModel):
     account_id: int
     vip: bool
+
+
+class AdminIn(BaseModel):
+    tg_user_id: int
+
+
+class IntervalIn(BaseModel):
+    hours: int
 
 
 @router.get("/overview")
@@ -66,3 +75,96 @@ async def set_vip(
         app_user.is_vip = body.vip
         await db.commit()
         return {"ok": True, "is_vip": app_user.is_vip}
+
+
+@router.get("/admins")
+async def list_admins(
+    token_account: int = Depends(require_account),
+    db=Depends(get_session),
+):
+    await require_admin(token_account, db)
+    async with db:
+        rows = (await db.execute(select(Admin))).scalars().all()
+        return {
+            "admins": [
+                {"tg_user_id": a.tg_user_id, "role": a.role, "added_by": a.added_by}
+                for a in rows
+            ]
+        }
+
+
+@router.post("/admins")
+async def add_admin(
+    body: AdminIn,
+    token_account: int = Depends(require_account),
+    db=Depends(get_session),
+):
+    """Yangi admin qo'shish (faqat owner)."""
+    me = await require_admin(token_account, db)
+    if not me.is_owner:
+        raise HTTPException(status_code=403, detail="Faqat owner admin qo'sha oladi")
+    async with db:
+        row = (
+            await db.execute(select(Admin).where(Admin.tg_user_id == body.tg_user_id))
+        ).scalar_one_or_none()
+        if row is None:
+            db.add(Admin(tg_user_id=body.tg_user_id, role="admin", added_by=me.tg_user_id))
+            await db.commit()
+        return {"ok": True}
+
+
+@router.delete("/admins/{tg_user_id}")
+async def remove_admin(
+    tg_user_id: int,
+    token_account: int = Depends(require_account),
+    db=Depends(get_session),
+):
+    me = await require_admin(token_account, db)
+    if not me.is_owner:
+        raise HTTPException(status_code=403, detail="Faqat owner admin o'chira oladi")
+    async with db:
+        await db.execute(delete(Admin).where(Admin.tg_user_id == tg_user_id))
+        await db.commit()
+        return {"ok": True}
+
+
+@router.get("/report-interval")
+async def get_report_interval(
+    token_account: int = Depends(require_account),
+    db=Depends(get_session),
+):
+    await require_admin(token_account, db)
+    return {"hours": report_interval_hours(), "allowed": sorted(REPORT_INTERVALS)}
+
+
+@router.post("/report-interval")
+async def set_report_interval(
+    body: IntervalIn,
+    token_account: int = Depends(require_account),
+    db=Depends(get_session),
+):
+    await require_admin(token_account, db)
+    if body.hours not in REPORT_INTERVALS:
+        raise HTTPException(status_code=400, detail="Oraliq 1/2/4/6/8 soat bo'lishi kerak")
+    from ..config import settings
+
+    settings.report_interval_hours = body.hours
+    return {"ok": True, "hours": body.hours}
+
+
+@router.get("/reports")
+async def list_reports(
+    token_account: int = Depends(require_account),
+    db=Depends(get_session),
+):
+    await require_admin(token_account, db)
+    async with db:
+        rows = (
+            await db.execute(select(AdminReport).order_by(AdminReport.created_at.desc()).limit(50))
+        ).scalars().all()
+        return {
+            "reports": [
+                {"id": r.id, "body": r.body, "created_at": r.created_at.isoformat()}
+                for r in rows
+            ]
+        }

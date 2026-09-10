@@ -7,6 +7,7 @@ export interface Account {
   bot_photo: string | null;
   auth_step: string;
   is_active: boolean;
+  app_user?: AppUserInfo;
 }
 
 export interface AppUserInfo {
@@ -53,4 +54,37 @@ export interface LoginResult {
   token: string;
   account: Account;
   app_user: AppUserInfo;
+}
+
+export interface BotSettings {
+  account: Account;
+  auto_reply: {
+    enabled: boolean;
+    text: string | null;
+    selected_text: string | null;
+    targets: { tg_user_id: number; name: string | null }[];
+  };
+  suggested_replies: string[];
+}
+
+export interface MusicPost {
+  id: number;
+  title: string;
+  performer: string | null;
+  caption: string;
+  media_url: string | null;
+  created_at: string | null;
+  reactions: { user_tg_id: number; reaction: string; comment: string | null }[];
+}
+
+export interface AdminAccount {
+  id: number;
+  phone: string;
+  first_name: string | null;
+  bot_name: string | null;
+  is_active: boolean;
+  auth_step: string;
+  app_user: { is_owner: boolean; is_admin: boolean; is_vip: boolean; theme: string };
+  dialogs_count: number;
+  messages_count: number;
 }

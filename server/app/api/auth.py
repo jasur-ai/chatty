@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from ..db import Account, SessionLocal
+from ..db import Account, AppUser, SessionLocal
 from ..tg.auth import start_login, submit_password, verify_code
 from ..tg.sync import serialize_account
 
@@ -55,4 +55,17 @@ async def list_accounts():
     """Barcha akkauntlar (login ekrani + switch uchun)."""
     async with SessionLocal() as db:
         rows = (await db.execute(select(Account))).scalars().all()
-        return {"accounts": [serialize_account(a) for a in rows]}
+        users = (await db.execute(select(AppUser))).scalars().all()
+        info = {u.account_id: u for u in users}
+        out = []
+        for a in rows:
+            item = serialize_account(a)
+            u = info.get(a.id)
+            item["app_user"] = {
+                "is_owner": u.is_owner if u else False,
+                "is_admin": u.is_admin if u else False,
+                "is_vip": u.is_vip if u else False,
+                "theme": u.theme if u else "default",
+            }
+            out.append(item)
+        return {"accounts": out}

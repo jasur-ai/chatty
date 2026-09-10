@@ -22,6 +22,12 @@ interface Store {
   loadingChats: boolean;
   loadingMessages: boolean;
   token: string | null;
+  settingsOpen: boolean;
+  lotusOpen: boolean;
+  openSettings: () => void;
+  closeSettings: () => void;
+  openLotus: () => void;
+  closeLotus: () => void;
   selectAccount: (id: number) => void;
   openDialog: (d: Dialog) => void;
   backToList: () => void;
@@ -48,6 +54,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingChats, setLoadingChats] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [lotusOpen, setLotusOpen] = useState(false);
   const hasMoreRef = useRef(false);
   const activeRef = useRef<Dialog | null>(null);
   const socketRef = useRef<ChattySocket | null>(null);
@@ -93,6 +101,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     async (id: number) => {
       const acc = accounts.find((a) => a.id === id) ?? null;
       setCurrent(acc);
+      setAppUser(acc?.app_user ?? null);
       setDialogs([]);
       setActiveDialog(null);
       setMessages([]);
@@ -228,6 +237,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     void refreshAccounts();
   }, [refreshAccounts]);
 
+  const openSettings = useCallback(() => setSettingsOpen(true), []);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  const openLotus = useCallback(() => setLotusOpen(true), []);
+  const closeLotus = useCallback(() => setLotusOpen(false), []);
+
   const store = useMemo<Store>(
     () => ({
       accounts,
@@ -239,6 +253,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       loadingChats,
       loadingMessages,
       token,
+      settingsOpen,
+      lotusOpen,
+      openSettings,
+      closeSettings,
+      openLotus,
+      closeLotus,
       selectAccount,
       openDialog,
       backToList,
@@ -257,6 +277,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       loadingChats,
       loadingMessages,
       token,
+      settingsOpen,
+      lotusOpen,
+      openSettings,
+      closeSettings,
+      openLotus,
+      closeLotus,
       selectAccount,
       openDialog,
       backToList,

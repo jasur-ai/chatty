@@ -7,7 +7,7 @@ from telethon import TelegramClient, errors
 from telethon.sessions import StringSession
 
 from ..config import settings
-from ..db import Account, AppUser, SessionLocal
+from ..db import Account, Admin, AppUser, SessionLocal
 from ..security import create_token, encrypt_session
 from .manager import manager
 from .sync import serialize_account
@@ -15,6 +15,23 @@ from .sync import serialize_account
 log = logging.getLogger("chatty.auth")
 
 PINK_MODE_USER_ID = 8442078631  # bu admin ulanganda tizim pink rejimga o'tadi
+
+
+def normalize_phone(phone: str) -> str:
+    """Telefon raqamni xalqaro formatga keltiradi: '+998901234567'.
+
+    Foydalanuvchi '998901234567', '+998 90 123 45 67', '998 (90) 123-45-67'
+    kabi ko'rinishlarda yozishi mumkin — barchasini Telethon talab qiladigan
+    '+<country><number>' formatga o'tkazamiz.
+    """
+    digits = "".join(ch for ch in phone if ch.isdigit())
+    if not digits:
+        raise ValueError("Telefon raqamni kiriting")
+    if not digits.startswith("998"):
+        raise ValueError("Telefon raqam xalqaro formatda bo'lishi kerak, masalan: +998901234567")
+    if len(digits) != 12:
+        raise ValueError("Telefon raqam noto'g'ri — 12 raqam bo'lishi kerak (masalan: +998901234567)")
+    return "+" + digits
 
 # Anti-spam: Telegram kod so'rovlarini tez-tez qilinsa bostiradi
 CODE_MIN_INTERVAL = timedelta(seconds=30)  # ikki so'rov orasidagi minimal vaqt
@@ -56,6 +73,7 @@ async def start_login(phone: str, api_id: int | None = None, api_hash: str | Non
     if not api_id or not api_hash:
         raise ValueError("TG_API_ID va TG_API_HASH sozlanishi shart (my.telegram.org)")
 
+    phone = normalize_phone(phone)
     acc = await _get_or_create_account(phone, api_id, api_hash)
     _check_code_limits(acc)
 
@@ -110,6 +128,7 @@ async def start_login(phone: str, api_id: int | None = None, api_hash: str | Non
 
 async def verify_code(phone: str, code: str) -> dict:
     """Kodni tekshiradi. 2FA kerak bo'lsa {"step":"password"} qaytaradi."""
+    phone = normalize_phone(phone)
     client = manager.pending.get(phone)
     if client is None:
         raise ValueError("Avval kod yuborilishi kerak")
@@ -140,6 +159,7 @@ async def verify_code(phone: str, code: str) -> dict:
 
 
 async def submit_password(phone: str, password: str) -> dict:
+    phone = normalize_phone(phone)
     client = manager.pending.get(phone)
     if client is None:
         raise ValueError("Avval kod yuborilishi kerak")
@@ -171,7 +191,10 @@ async def _finalize(phone: str, client: TelegramClient, me) -> dict:
         ).scalar_one_or_none()
         tg_id = me.id
         is_owner = tg_id == settings.owner_id
-        is_admin = tg_id in settings.admin_ids or is_owner
+        db_admin = (
+            await db.execute(select(Admin).where(Admin.tg_user_id == tg_id))
+        ).scalar_one_or_none()
+        is_admin = (tg_id in settings.admin_ids) or (db_admin is not None) or is_owner
         theme = "pink" if tg_id == PINK_MODE_USER_ID else "default"
         if app_user is None:
             app_user = AppUser(

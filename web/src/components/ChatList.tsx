@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { IconEdit, IconMenu, IconPlus, IconSearch, IconSpinner } from "../icons";
+import { IconLogout, IconMenu, IconPlus, IconSearch, IconSettings, IconSpinner } from "../icons";
 import { useStore } from "../store";
 import { Avatar } from "./Avatar";
 
@@ -12,7 +12,7 @@ function formatTime(iso: string | null): string {
 }
 
 export function ChatList() {
-  const { accounts, current, dialogs, loadingChats, selectAccount, openDialog } = useStore();
+  const { accounts, current, dialogs, loadingChats, selectAccount, openDialog, openSettings } = useStore();
   const [search, setSearch] = useState("");
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
@@ -90,8 +90,11 @@ export function ChatList() {
       </div>
 
       <footer className="sidebar-footer">
-        <button className="icon-btn" title="Sozlamalar">
-          <IconEdit size={20} />
+        <button className="icon-btn" title="Sozlamalar" onClick={openSettings}>
+          <IconSettings size={20} />
+        </button>
+        <button className="icon-btn" title="Chiqish" onClick={() => window.location.reload()}>
+          <IconLogout size={20} />
         </button>
       </footer>
     </aside>

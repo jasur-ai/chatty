@@ -1,6 +1,7 @@
 """Telethon update handlerlari: xabarlar va o'qilgan holatlar → DB + WebSocket."""
 import asyncio
 import logging
+from types import SimpleNamespace
 
 from sqlalchemy import select, update as sa_update
 from telethon import events
@@ -10,7 +11,15 @@ from ..db import Account, AppUser, Dialog, Message, SessionLocal
 from ..notify import media_brief, notifier
 from ..security import decrypt_session
 from ..ws import ws_manager
-from .sync import serialize_dialog, serialize_message, update_dialog_last, upsert_dialog, upsert_message
+from .filter import apply_incoming
+from .sync import (
+    peer_type_of,
+    serialize_dialog,
+    serialize_message,
+    update_dialog_last,
+    upsert_dialog,
+    upsert_message,
+)
 
 log = logging.getLogger("chatty.events")
 
@@ -22,17 +31,29 @@ async def on_new_message(event: events.NewMessage.Event, account_id: int) -> Non
     if msg.action is not None:  # servis xabarlar (qo'shildi, chiqdi ...) — hozircha skip
         return
 
-    async with SessionLocal() as db:
+    try:
+        chat = await event.get_chat()
+    except Exception:
+        return
+
+    is_out = bool(msg.out)
+
+    # 1) Filtr + avto-javob (o'z session'lari bilan — SQLite write-lock'ni ushlab turmaslik uchun)
+    hidden = False
+    if not is_out:
+        peer = SimpleNamespace(tg_id=chat.id, peer_type=peer_type_of(chat))
         try:
-            chat = await event.get_chat()
-        except Exception:
-            return
+            hidden = await apply_incoming(event.client, account_id, peer, msg)
+        except Exception as e:  # noqa: BLE001
+            log.warning("Filtr/avto-javob xatosi: %s", e)
+
+    # 2) DB'ga yozish
+    async with SessionLocal() as db:
         dialog = await upsert_dialog(db, account_id, chat)
-        is_out = bool(msg.out)
         if not is_out:
             dialog.unread_count += 1
         try:
-            row = await upsert_message(db, event.client, account_id, dialog, msg)
+            row = await upsert_message(db, event.client, account_id, dialog, msg, hidden=hidden)
         except Exception as e:
             log.warning("Xabarni saqlashda xato: %s", e)
             return
@@ -48,7 +69,7 @@ async def on_new_message(event: events.NewMessage.Event, account_id: int) -> Non
 
         # Push-xabarnoma: app ochiq bo'lmasa va chat USER bo'lsa
         # (kanal/guruh xabarlari faqat app ichida ko'rinadi — spec bo'yicha)
-        if not is_out and dialog.peer_type == "user":
+        if not is_out and dialog.peer_type == "user" and not hidden:
             connected = ws_manager.connections.get(account_id)
             if not connected:
                 app_user = (

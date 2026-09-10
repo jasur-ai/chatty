@@ -5,12 +5,17 @@ import { Main } from "./pages/Main";
 import { useStore } from "./store";
 
 export function App() {
-  const { accounts, current, token, refreshAccounts } = useStore();
+  const { accounts, current, token, appUser, refreshAccounts } = useStore();
   const [booted, setBooted] = useState(false);
 
   useEffect(() => {
     void refreshAccounts().finally(() => setBooted(true));
   }, [refreshAccounts]);
+
+  // Pink/default rejimni qo'llash
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", appUser?.theme === "pink" ? "pink" : "default");
+  }, [appUser?.theme]);
 
   if (!booted) {
     return (

@@ -7,10 +7,11 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .api import admin, auth, chats
+from .api import admin, auth, bot, chats, lotus_api
 from .config import settings
 from .db import init_db
 from .notify import notifier
+from .scheduler import scheduler
 from .security import decode_token
 from .tg.manager import manager
 from .ws import ws_manager
@@ -27,8 +28,10 @@ async def lifespan(app: FastAPI):
     await init_db()
     await manager.start_all()
     await notifier.start_polling()
+    await scheduler.start()
     log.info("Chatty server ishga tushdi")
     yield
+    await scheduler.stop()
     await notifier.stop()
     await manager.shutdown()
 
@@ -46,6 +49,8 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(chats.router)
 app.include_router(admin.router)
+app.include_router(bot.router)
+app.include_router(lotus_api.router)
 
 
 @app.get("/api/health")
