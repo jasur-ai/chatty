@@ -31,4 +31,7 @@ Thumbs.db
 # Runtime
 data/
 *.sqlite3
-*.dbtools/
+*.db
+
+# Lokal vositalar
+tools/
