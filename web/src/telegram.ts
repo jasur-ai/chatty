@@ -17,6 +17,8 @@ interface TgWebAppLike {
   ready?: () => void;
   expand?: () => void;
   isExpanded?: boolean;
+  requestFullscreen?: () => void;
+  isFullscreen?: boolean;
   colorScheme?: "light" | "dark";
   initData?: string;
   initDataUnsafe?: {
@@ -30,6 +32,7 @@ interface TgWebAppLike {
   setHeaderColor?: (c: string) => void;
   setBackgroundColor?: (c: string) => void;
   version?: string;
+  onEvent?: (eventType: string, handler: () => void) => void;
 }
 
 declare global {
@@ -78,23 +81,48 @@ export function initTelegram() {
   } catch {
     /* ignore */
   }
-  // expand() ba'zan SDK hali tayyor bo'lmaganda ishlamaydi — retry qilamiz
+  // Telegram sarlavhasini ham app foniga moslab, kengaytirilgan ko'rinish beramiz
+  try {
+    wa.setHeaderColor?.("#000000");
+    wa.setBackgroundColor?.("#000000");
+  } catch {
+    /* ignore */
+  }
+
+  // To'liq ekran: avval requestFullscreen (haqiqiy fullscreen), bo'lmasa expand()
   let tries = 0;
-  const doExpand = () => {
+  const doFullscreen = () => {
     tries++;
     try {
-      wa.expand?.();
-      // Mini app to'liq ekranga chiqishi uchun viewport'ni sozlaymiz
-      document.documentElement.style.height = "100%";
-      document.body.style.height = "100%";
+      if (typeof wa.requestFullscreen === "function") {
+        wa.requestFullscreen();
+      } else {
+        wa.expand?.();
+      }
     } catch {
-      /* ignore */
+      try {
+        wa.expand?.();
+      } catch {
+        /* ignore */
+      }
     }
-    if (tries < 5 && !wa.isExpanded) {
-      setTimeout(doExpand, 300);
+    // viewport'ni to'liq balandlikka sozlaymiz
+    document.documentElement.style.height = "100%";
+    document.body.style.height = "100%";
+    document.documentElement.style.setProperty("--tg-viewport-height", `${window.innerHeight}px`);
+
+    const full = typeof wa.isFullscreen === "boolean" ? wa.isFullscreen : wa.isExpanded;
+    if (tries < 8 && !full) {
+      setTimeout(doFullscreen, 250);
     }
   };
-  doExpand();
+  doFullscreen();
+
+  // viewport o'lchami o'zgarganda qayta sozlash
+  window.addEventListener("resize", () => {
+    document.documentElement.style.setProperty("--tg-viewport-height", `${window.innerHeight}px`);
+  });
+
   // Telegram rang sxemasi o'zgarsa ham qo'llash
   if (wa.colorScheme) {
     document.documentElement.setAttribute("data-color-scheme", wa.colorScheme);
