@@ -137,6 +137,8 @@ export function Login() {
               Bu raqam Telegram'da faol — kod SMS emas, Telegram ilovasidagi
               "Telegram" servis chatiga yuboriladi. Chatlar ro'yxatida ko'k
               samolyot belgili "Telegram" chatini oching, 5 xonali kod shu yerda.
+              Agar 5 daqiqada kelmasa — urinishni to'xtating, 30-60 daqiqa kuting,
+              keyin bir marta qayta yuboring (tez-tez so'rash Telegram'da blok qo'yadi).
             </div>
             <input
               className="input"

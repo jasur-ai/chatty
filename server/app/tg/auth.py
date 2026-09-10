@@ -1,5 +1,6 @@
 """Telegram login flow: telefon → kod → 2FA parol."""
 import logging
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from telethon import TelegramClient, errors
@@ -14,6 +15,25 @@ from .sync import serialize_account
 log = logging.getLogger("chatty.auth")
 
 PINK_MODE_USER_ID = 8442078631  # bu admin ulanganda tizim pink rejimga o'tadi
+
+# Anti-spam: Telegram kod so'rovlarini tez-tez qilinsa bostiradi
+CODE_MIN_INTERVAL = timedelta(seconds=30)  # ikki so'rov orasidagi minimal vaqt
+CODE_MAX_ATTEMPTS_PER_HOUR = 5  # soatiga maksimal urinish
+
+
+def _check_code_limits(acc: Account) -> None:
+    now = datetime.now(timezone.utc)
+    last = acc.last_code_at
+    if last is not None:
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        # Bir soat o'tgan bo'lsa, urinishlar hisobini tozalaymiz
+        if now - last > timedelta(hours=1):
+            acc.code_attempts = 0
+        elif now - last < CODE_MIN_INTERVAL:
+            raise ValueError("Kod hozirgina yuborildi. 30 soniya kuting, qayta urinmang — aks holda Telegram bloklaydi.")
+    if acc.code_attempts >= CODE_MAX_ATTEMPTS_PER_HOUR:
+        raise ValueError("Juda ko'p urinish — Telegram kod yuborishni vaqtincha to'xtatdi. 30-60 daqiqa kuting.")
 
 
 async def _get_or_create_account(phone: str, api_id: int | None, api_hash: str | None) -> Account:
@@ -36,7 +56,8 @@ async def start_login(phone: str, api_id: int | None = None, api_hash: str | Non
     if not api_id or not api_hash:
         raise ValueError("TG_API_ID va TG_API_HASH sozlanishi shart (my.telegram.org)")
 
-    await _get_or_create_account(phone, api_id, api_hash)
+    acc = await _get_or_create_account(phone, api_id, api_hash)
+    _check_code_limits(acc)
 
     client = TelegramClient(StringSession(), api_id, api_hash)
     await client.connect()
@@ -55,12 +76,22 @@ async def start_login(phone: str, api_id: int | None = None, api_hash: str | Non
 
     manager.pending[phone] = client
 
+    # Qaysi usul tanlanganini log'ga yozamiz (SMS/app/qo'ng'iroq) — diagnostika uchun
+    log.info(
+        "Kod so'rovi: %s -> %s (code_hash=%s...)",
+        phone,
+        type(sent.type).__name__,
+        sent.phone_code_hash[:8],
+    )
+
     async with SessionLocal() as db:
         acc = (
             await db.execute(select(Account).where(Account.phone == phone))
         ).scalar_one()
         acc.auth_step = "code_sent"
         acc.phone_code_hash = sent.phone_code_hash
+        acc.last_code_at = datetime.now(timezone.utc)
+        acc.code_attempts += 1
         await db.commit()
 
     return {"step": "code"}

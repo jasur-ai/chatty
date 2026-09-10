@@ -34,6 +34,8 @@ class Account(Base):
     session_enc: Mapped[str] = mapped_column(Text, default="")  # Fernet bilan shifrlangan StringSession
     auth_step: Mapped[str] = mapped_column(String(16), default="none")  # none|code_sent|awaiting_2fa|ready
     phone_code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_code_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # anti-spam: oxirgi kod so'rovi
+    code_attempts: Mapped[int] = mapped_column(Integer, default=0)  # soatdagi urinishlar soni
     first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # Bot-persona sozlamalari (default = akkaunt bilan bir xil, keyin o'zgartiriladi)
