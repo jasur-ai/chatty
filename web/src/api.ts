@@ -87,14 +87,32 @@ export const api = {
     dialogId: number,
     text: string,
     token: string,
-    replyTo?: number,
+    opts?: { replyTo?: number; mediaKey?: string; mediaType?: string },
   ) =>
     req<Message>(
       "/api/messages",
       {
         method: "POST",
-        body: JSON.stringify({ account_id: accountId, dialog_id: dialogId, text, reply_to: replyTo ?? null }),
+        body: JSON.stringify({
+          account_id: accountId,
+          dialog_id: dialogId,
+          text,
+          reply_to: opts?.replyTo ?? null,
+          media_key: opts?.mediaKey ?? null,
+          media_type: opts?.mediaType ?? null,
+        }),
       },
       token,
     ),
+
+  uploadMedia: (accountId: number, file: File, token: string) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("account_id", String(accountId));
+    return req<{ media_key: string; media_type: string; size: number }>(
+      "/api/media/upload",
+      { method: "POST", body: fd },
+      token,
+    );
+  },
 };

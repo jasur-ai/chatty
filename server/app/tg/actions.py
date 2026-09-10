@@ -1,11 +1,14 @@
 """Chat harakatlari: dialoglar/xabarlar sinxroni, yuborish, o'qilgan qilish."""
+import io
 import logging
+import tempfile
+from pathlib import Path
 
 from sqlalchemy import select, update as sa_update
 from telethon import functions
-from telethon.errors import ChannelPrivateError
 
 from ..db import Dialog, Message, SessionLocal
+from ..storage import storage
 from ..ws import ws_manager
 from .manager import manager
 from .sync import (
@@ -90,6 +93,65 @@ async def send_text(
         row = await upsert_message(db, client, account_id, dialog, sent)
         await update_dialog_last(db, dialog, sent, True)
         await db.commit()
+        payload = {"type": "message", "dialog": serialize_dialog(dialog), "message": serialize_message(row)}
+        await ws_manager.broadcast(account_id, payload)
+        return serialize_message(row)
+
+
+async def send_media(
+    account_id: int,
+    dialog_id: int,
+    media_key: str,
+    media_type: str,
+    caption: str = "",
+    reply_to_tg_id: int | None = None,
+) -> dict:
+    """R2'dagi faylni Telegram'ga media sifatida yuboradi."""
+    client = await _require_client(account_id)
+    data, content_type = storage.get(media_key)
+
+    async with SessionLocal() as db:
+        dialog = (
+            await db.execute(select(Dialog).where(Dialog.id == dialog_id, Dialog.account_id == account_id))
+        ).scalar_one_or_none()
+        if dialog is None:
+            raise ValueError("Dialog topilmadi")
+        entity = await client.get_entity(input_peer(dialog.tg_id, dialog.peer_type))
+
+        # R2'dan temp faylga chiqarib, Telethon orqali yuboramiz
+        ext = Path(media_key).suffix or ".bin"
+        tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+        try:
+            tmp.write(data)
+            tmp.close()
+            sent = await client.send_file(
+                entity,
+                tmp.name,
+                caption=caption or None,
+                reply_to=reply_to_tg_id,
+                force_document=(media_type == "file"),
+            )
+        finally:
+            Path(tmp.name).unlink(missing_ok=True)
+
+        # Xabarni DB'ga yozamiz (media R2'da allaqachon — qayta yuklab olmaymiz)
+        row = Message(
+            account_id=account_id,
+            dialog_id=dialog.id,
+            tg_id=sent.id,
+            out=True,
+            text=caption,
+            media_type=media_type,
+            media_key=media_key,
+            media_size=len(data),
+            date=sent.date,
+            reply_to=sent.reply_to_msg_id,
+            read=False,
+        )
+        db.add(row)
+        await update_dialog_last(db, dialog, sent, True)
+        await db.commit()
+        await db.refresh(row)
         payload = {"type": "message", "dialog": serialize_dialog(dialog), "message": serialize_message(row)}
         await ws_manager.broadcast(account_id, payload)
         return serialize_message(row)

@@ -63,6 +63,19 @@ Web app (React PWA)  ⇄  REST + WebSocket  ⇄  FastAPI server  ⇄  MTProto (T
 | 5. Lotus AI 0.0.1 | ⏳ navbatda |
 | 6. Pink rejim + final UI | ⏳ navbatda |
 
+## Deploy (Render)
+
+Loyiha Docker'ga tayyor (`Dockerfile`). Render'da:
+
+1. [render.com](https://render.com) → **New > Blueprint** → `render.yaml` (repo ichida)
+2. GitHub reponi ulang (`jasur-ai/chatty`)
+3. Dashboard'da secret env var'larni to'ldiring: `TG_API_ID`, `TG_API_HASH`, `TG_BOT_TOKEN`,
+   `R2_*`, `SESSION_SECRET`, `JWT_SECRET`, `BOT_REPLY_URL=https://<sizning-url>.onrender.com`
+4. Deploy — `render.yaml` avtomatik disk (`/app/data` — sessiyalar saqlanadi) va health check sozlaydi
+
+> Render **Starter** ($7/oy) doimiy ishlaydi; bepul plan 15 daqiqa harakatsizlikda uxlab qoladi (bot uchun yaroqsiz).
+> Muqobil: Fly.io (CLI, bepul allowance) yoki VPS.
+
 ## Xavfsizlik
 
 - `api_id`/`api_hash`, R2 kredensiallari faqat `.env` da (gitignore qilingan)

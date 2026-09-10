@@ -1,0 +1,13 @@
+.git/
+.gitignore
+.venv/
+__pycache__/
+node_modules/
+web/dist/
+web/.vite/
+data/
+*.db
+*.sqlite3
+.env
+*.log
+docs/

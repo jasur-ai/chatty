@@ -1,4 +1,4 @@
-import { IconCheck, IconCheckDouble } from "../icons";
+import { IconCheck, IconCheckDouble, IconDownload } from "../icons";
 import type { Message } from "../types";
 
 function fmtTime(iso: string | null): string {
@@ -6,17 +6,43 @@ function fmtTime(iso: string | null): string {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-const MEDIA_LABEL: Record<string, string> = {
-  photo: "Rasm",
-  video: "Video",
-  round: "Dumaloq video",
-  voice: "Audio xabar",
-  audio: "Musiqa",
-  sticker: "Stiker",
-  gif: "GIF",
-  file: "Fayl",
-  poll: "So'rov",
-};
+function MediaContent({ msg }: { msg: Message }) {
+  const url = msg.media_url;
+  if (!url) {
+    return <div className="media-placeholder"><span>Media</span></div>;
+  }
+  switch (msg.media_type) {
+    case "photo":
+      return <img src={url} alt="Rasm" className="media-img" loading="lazy" />;
+    case "video":
+      return (
+        <video src={url} controls className="media-img" preload="metadata" />
+      );
+    case "round":
+      return (
+        <video
+          src={url}
+          controls
+          playsInline
+          className="media-round"
+          preload="metadata"
+        />
+      );
+    case "voice":
+    case "audio":
+      return <audio src={url} controls className="media-audio" preload="metadata" />;
+    case "gif":
+      return <img src={url} alt="GIF" className="media-img" loading="lazy" />;
+    case "file":
+    default:
+      return (
+        <a className="file-chip" href={url} download target="_blank" rel="noreferrer">
+          <IconDownload size={20} />
+          <span>Fayl</span>
+        </a>
+      );
+  }
+}
 
 export function MessageBubble({ msg }: { msg: Message }) {
   const hasMedia = msg.media_type !== "none";
@@ -25,15 +51,7 @@ export function MessageBubble({ msg }: { msg: Message }) {
       <div className={`bubble ${msg.out ? "out" : "in"} ${hasMedia ? "has-media" : ""}`}>
         {hasMedia && (
           <div className="media-box">
-            {msg.media_type === "photo" && msg.media_url && (
-              <img src={msg.media_url} alt="Rasm" className="media-img" />
-            )}
-            {msg.media_type !== "photo" && (
-              <div className="media-placeholder">
-                <span className="media-label">{MEDIA_LABEL[msg.media_type] ?? "Media"}</span>
-                {msg.media_type === "round" && <span className="media-sub">dumaloq video</span>}
-              </div>
-            )}
+            <MediaContent msg={msg} />
           </div>
         )}
         {msg.text && <div className="bubble-text">{msg.text}</div>}

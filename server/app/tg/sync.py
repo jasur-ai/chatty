@@ -20,6 +20,23 @@ from ..storage import storage
 
 
 # ---------------- media ----------------
+def media_type_from_content_type(content_type: str, filename: str = "") -> str:
+    """Yuklangan fayl uchun media turi (content-type/extension bo'yicha)."""
+    ct = (content_type or "").lower()
+    name = (filename or "").lower()
+    if ct.startswith("image/"):
+        return "photo"
+    if ct.startswith("video/"):
+        return "video"
+    if ct.startswith("audio/ogg") or ct.startswith("audio/opus") or name.endswith(".ogg"):
+        return "voice"
+    if ct.startswith("audio/"):
+        return "audio"
+    if ct.startswith("text/") or name.endswith((".doc", ".docx", ".pdf", ".txt", ".xls", ".xlsx", ".zip", ".rar")):
+        return "file"
+    return "file"
+
+
 def media_type_of(msg) -> str:
     if msg.photo:
         return "photo"

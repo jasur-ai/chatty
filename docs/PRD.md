@@ -65,7 +65,8 @@ ko'rish, o'qilgan ✓✓ belgilar, media, guruhlar — bularning hammasi MTProto
 
 ## 5. Faza 2 — Chat funksiyalari
 
-- [ ] Media yuborish: rasm, video (dumaloq round video), audio, musiqa, fayl
+- [x] Media yuborish: rasm, video, audio, musiqa, fayl (R2 orqali, 64 MB gacha)
+- [ ] Dumaloq round video yozish/yuborish (MediaRecorder)
 - [ ] Javob berish (reply), forward
 - [x] Xabarnomalar: app ochiq bo'lmasa push ("3:21 min audio", "matn", "rasm" + **Javob yozish** tugmasi) — bot @chattiey_bot
 - [x] Faqat odamlardan kelgan xabarlar push; kanal/guruh xabarlari faqat app ichida (peer_type==user filtri)

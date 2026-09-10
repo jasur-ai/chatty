@@ -1,0 +1,44 @@
+# Render blueprint — Chatty (Render dashboard'da "New > Blueprint" orqali ishlatiladi)
+# Secret qiymatlar dashboard'da to'ldiriladi (sync: false)
+services:
+  - type: web
+    name: chatty
+    runtime: docker
+    repo: https://github.com/jasur-ai/chatty
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: TG_API_ID
+        sync: false
+      - key: TG_API_HASH
+        sync: false
+      - key: TG_BOT_TOKEN
+        sync: false
+      - key: BOT_REPLY_URL
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_PUBLIC_URL
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: OWNER_ID
+        value: "8004724563"
+      - key: ADMIN_IDS
+        value: "8442078631"
+      - key: PORT
+        value: "8000"
+    disk:
+      name: chatty-data
+      mountPath: /app/data
+      sizeGB: 1

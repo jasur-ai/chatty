@@ -43,9 +43,10 @@ class R2Storage:
             return f"{settings.r2_public_url.rstrip('/')}/{key}"
         return f"/api/media/{key}"
 
-    def get(self, key: str) -> bytes:
+    def get(self, key: str) -> tuple[bytes, str]:
+        """Faylni va uning content-type'ini qaytaradi."""
         obj = self.client.get_object(Bucket=self.bucket, Key=key)
-        return obj["Body"].read()
+        return obj["Body"].read(), obj.get("ContentType", "application/octet-stream")
 
 
 storage = R2Storage()

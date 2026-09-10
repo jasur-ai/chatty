@@ -111,6 +111,15 @@ export const IconEdit = (p: IconProps) =>
     </>
   ));
 
+export const IconDownload = (p: IconProps) =>
+  base(p, (
+    <>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M12 15V3" />
+    </>
+  ));
+
 export const IconSpinner = (p: IconProps) => (
   <svg width={p.size ?? 20} height={p.size ?? 20} viewBox="0 0 24 24" fill="none" className={p.className} aria-hidden="true">
     <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
