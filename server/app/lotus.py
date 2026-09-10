@@ -2,8 +2,8 @@
 
 Xususiyatlari:
   - Til: uz (default) / ru / en
-  - Real LLM (OpenAI-kompatibl endpoint) sozlangan bo'lsa ishlatiladi;
-    aks holda o'rnatilgan offline intents dvigateli ishlaydi (hech qanday kalitsiz).
+  - Real LLM (tekin provider: Groq/OpenRouter/Gemini) faqat VIP foydalanuvchilarga.
+    Oddiy foydalanuvchilar uchun o'rnatilgan offline intents ishlaydi (kalitsiz).
   - Eslatmalar (reminders), yordam, til almashtirish, hisobot va boshqa buyruqlar.
   - Voice chat: STT/TTS uchun hook'lar (frontend brauzer STT, TTS esa xizmat orqali).
 """
@@ -19,10 +19,10 @@ log = logging.getLogger("chatty.lotus")
 LOTUS_NAME = "Lotus 0.0.1"
 LANGUAGES = {"uz", "ru", "en"}
 
-# OpenAI-kompatibl LLM sozlamalari (ixtiyoriy, tekin/mahalliy endpoint bo'lishi mumkin)
-LLM_URL = getattr(settings, "lotus_llm_url", "") or ""
-LLM_KEY = getattr(settings, "lotus_llm_key", "") or ""
-LLM_MODEL = getattr(settings, "lotus_llm_model", "") or "gpt-4o-mini"
+# Tein LLM sozlamalari (ixtiyoriy — faqat VIP uchun)
+LLM_URL = settings.lotus_endpoint
+LLM_KEY = settings.lotus_llm_key
+LLM_MODEL = settings.lotus_llm_model
 
 _INTRO = {
     "uz": "Salom, men Lotus 0.0.1 — sizning shaxsiy yordamchingizman. "
@@ -58,11 +58,26 @@ _HELP = {
 _YES = {"uz": "ha", "ru": "да", "en": "yes"}
 
 
+async def is_vip(account_id: int | None) -> bool:
+    """Foydalanuvchi VIP ekanini tekshiradi (LLM faqat VIP uchun)."""
+    if account_id is None:
+        return False
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from .db import AppUser, SessionLocal  # noqa: PLC0415
+
+    async with SessionLocal() as db:
+        u = (
+            await db.execute(select(AppUser).where(AppUser.account_id == account_id))
+        ).scalar_one_or_none()
+        return bool(u and u.is_vip)
+
+
 class Lotus:
     def __init__(self) -> None:
         self.language = "uz"
         self.voice_enabled = False
-        self.llm_enabled = bool(LLM_URL)
+        self.llm_enabled = bool(LLM_URL and LLM_KEY)
 
     # ---------- tashqi sozlamalar (DB'dan yuklanadi) ----------
     def configure(self, language: str | None = None, voice_enabled: bool | None = None) -> None:
@@ -79,7 +94,7 @@ class Lotus:
             headers = {"Content-Type": "application/json"}
             if LLM_KEY:
                 headers["Authorization"] = f"Bearer {LLM_KEY}"
-            async with httpx.AsyncClient(timeout=30) as c:
+            async with httpx.AsyncClient(timeout=60) as c:
                 r = await c.post(
                     LLM_URL,
                     json={"model": LLM_MODEL, "messages": messages},
@@ -94,9 +109,10 @@ class Lotus:
 
     # ---------- buyruqni tahlil qilish (offline intents) ----------
     async def reply(self, text: str, context: dict | None = None) -> str:
-        """Foydalanuvchi matniga javob beradi (LLM yoki offline)."""
+        """Foydalanuvchi matniga javob beradi (VIP -> LLM, oddiy -> offline)."""
         text = (text or "").strip()
         lang = self.language
+        account_id = (context or {}).get("account_id")
 
         # 1) buyruqlar (barcha tillarda)
         low = text.lower()
@@ -127,20 +143,21 @@ class Lotus:
         if any(k in low for k in ("salom", "assalom", "привет", "здравств", "hello", "hi")):
             return _INTRO.get(lang, _INTRO["uz"])
 
-        # 2) LLM (agar sozlangan bo'lsa)
-        sys_msg = {
-            "uz": "Sen Lotus 0.0.1, Chatty platformasining ichki yordamchisisan. Qisqa va aniq javob ber.",
-            "ru": "Ты Lotus 0.0.1, внутренний помощник платформы Chatty. Отвечай кратко и точно.",
-            "en": "You are Lotus 0.0.1, the internal assistant of Chatty. Answer briefly and accurately.",
-        }[lang]
-        llm_out = await self._llm(
-            [
-                {"role": "system", "content": sys_msg},
-                {"role": "user", "content": text},
-            ]
-        )
-        if llm_out:
-            return llm_out
+        # 2) LLM (faqat VIP foydalanuvchilar uchun, agar kalit sozlangan bo'lsa)
+        if self.llm_enabled and await is_vip(account_id):
+            sys_msg = {
+                "uz": "Sen Lotus 0.0.1, Chatty platformasining ichki yordamchisisan. Qisqa va aniq javob ber.",
+                "ru": "Ты Lotus 0.0.1, внутренний помощник платформы Chatty. Отвечай кратко и точно.",
+                "en": "You are Lotus 0.0.1, the internal assistant of Chatty. Answer briefly and accurately.",
+            }[lang]
+            llm_out = await self._llm(
+                [
+                    {"role": "system", "content": sys_msg},
+                    {"role": "user", "content": text},
+                ]
+            )
+            if llm_out:
+                return llm_out
 
         # 3) offline fallback
         return {
@@ -193,6 +210,40 @@ class Lotus:
             "ru": f"Напоминание установлено: '{task or 'Напоминание'}' — в {t}.",
             "en": f"Reminder set: '{task or 'Reminder'}' at {t}.",
         }[lang]
+
+    async def generate(self, prompt: str, account_id: int | None = None) -> str | None:
+        """Umumiy LLM chaqiruv (faqat VIP uchun). Javob yo'q bo'lsa None."""
+        if not (self.llm_enabled and await is_vip(account_id)):
+            return None
+        return await self._llm(
+            [
+                {
+                    "role": "system",
+                    "content": "Sen Lotus 0.0.1, Chatty platformasining ichki yordamchisisan.",
+                },
+                {"role": "user", "content": prompt},
+            ]
+        )
+
+    async def summarize(self, text: str, account_id: int | None = None) -> str | None:
+        """Matnni xulosa qilish (VIP)."""
+        return await self.generate(f"Quyidagi matnni 2-3 jumlada xulosa qil:\n\n{text}", account_id)
+
+    async def translate(self, text: str, target: str, account_id: int | None = None) -> str | None:
+        """Tarjima (VIP). target: uz/ru/en."""
+        names = {"uz": "o'zbek", "ru": "rus", "en": "ingliz"}
+        return await self.generate(
+            f"Quyidagi matnni {names.get(target, target)} tiliga tarjima qil, faqat tarjimani qaytar:\n\n{text}",
+            account_id,
+        )
+
+    async def ai_reply_text(self, incoming: str, account_id: int | None = None) -> str | None:
+        """Kiruvchi xabarga kontekstli AI javob (VIP uchun avto-javob)."""
+        return await self.generate(
+            "Sen ushbu akkaunt egasisan. Quyidagi xabarga qisqa, tabiiy va do'stona javob yoz "
+            "(o'zbek tilida, 1-2 jumla):\n\n" + incoming,
+            account_id,
+        )
 
     async def ask_confirm(self, text: str) -> bool:
         """Tasdiqlash so'roviga javob beradi (ha/yo'q)."""

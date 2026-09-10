@@ -36,13 +36,26 @@ class Settings:
     owner_id: int = int(os.getenv("OWNER_ID", "8004724563"))
     admin_ids: list[int] = [int(x) for x in os.getenv("ADMIN_IDS", "8442078631").split(",") if x]
 
-    # Lotus AI (OpenAI-kompatibl LLM — ixtiyoriy; bo'sh bo'lsa offline rejim)
+    # Lotus AI (tekin LLM — VIP uchun; ixtiyoriy; bo'sh bo'lsa offline rejim)
+    lotus_provider: str = os.getenv("LOTUS_PROVIDER", "groq")  # groq|openrouter|gemini|custom
     lotus_llm_url: str = os.getenv("LOTUS_LLM_URL", "")
     lotus_llm_key: str = os.getenv("LOTUS_LLM_KEY", "")
-    lotus_llm_model: str = os.getenv("LOTUS_LLM_MODEL", "gpt-4o-mini")
+    lotus_llm_model: str = os.getenv("LOTUS_LLM_MODEL", "llama-3.3-70b-versatile")
 
     # Admin AI hisobot oraliq (soat) — 1/2/4/6/8
     report_interval_hours: int = int(os.getenv("REPORT_INTERVAL_HOURS", "2"))
+
+    # LLM endpoint'ini provider preset bo'yicha avtomatik tanlash
+    @property
+    def lotus_endpoint(self) -> str:
+        if self.lotus_llm_url:
+            return self.lotus_llm_url
+        presets = {
+            "groq": "https://api.groq.com/openai/v1/chat/completions",
+            "openrouter": "https://openrouter.ai/api/v1/chat/completions",
+            "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        }
+        return presets.get(self.lotus_provider, "https://api.groq.com/openai/v1/chat/completions")
 
     # DB
     database_url: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/chatty.db")

@@ -1,11 +1,13 @@
 import type {
   Account,
   AdminAccount,
+  Analytics,
   BotSettings,
   Dialog,
   LoginResult,
   Message,
   MusicPost,
+  SearchResult,
 } from "./types";
 
 const TOKEN_KEY = "chatty_tokens";
@@ -151,7 +153,7 @@ export const api = {
 
   setAutoReply: (
     accountId: number,
-    body: { enabled?: boolean; text?: string; selected_text?: string },
+    body: { enabled?: boolean; text?: string; selected_text?: string; schedule_from?: string; schedule_to?: string },
     token: string,
   ) => req<{ ok: boolean }>("/api/bot/auto-reply", { method: "POST", body: JSON.stringify({ account_id: accountId, ...body }) }, token),
 
@@ -208,4 +210,60 @@ export const api = {
 
   lotusReminders: (token: string) =>
     req<{ reminders: { id: number; text: string; due_at: string; done: boolean }[] }>("/api/lotus/reminders", {}, token),
+
+  lotusSummarize: (text: string, token: string) =>
+    req<{ summary: string }>("/api/lotus/summarize", { method: "POST", body: JSON.stringify({ text }) }, token),
+
+  lotusTranslate: (text: string, target: string, token: string) =>
+    req<{ translated: string }>("/api/lotus/translate", { method: "POST", body: JSON.stringify({ text, target }) }, token),
+
+  // ---- Pro funksiyalar (barcha foydalanuvchilar uchun) ----
+  scheduleMessage: (
+    accountId: number,
+    body: { dialog_id: number; text: string; send_at: string },
+    token: string,
+  ) => req<{ ok: boolean; id: number }>("/api/bot/schedule", { method: "POST", body: JSON.stringify({ account_id: accountId, ...body }) }, token),
+
+  scheduledList: (accountId: number, token: string) =>
+    req<{ scheduled: { id: number; dialog_id: number; text: string; send_at: string; sent: boolean }[] }>(
+      `/api/bot/schedule?account_id=${accountId}`,
+      {},
+      token,
+    ),
+
+  deleteScheduled: (id: number, token: string) =>
+    req<{ ok: boolean }>(`/api/bot/schedule/${id}`, { method: "DELETE" }, token),
+
+  forward: (accountId: number, body: { dialog_id: number; msg_tg_id: number; target_dialog_ids: number[] }, token: string) =>
+    req<{ ok: boolean; forwarded_to: number[] }>("/api/bot/forward", { method: "POST", body: JSON.stringify({ account_id: accountId, ...body }) }, token),
+
+  searchMessages: (accountId: number, q: string, token: string) =>
+    req<{ results: SearchResult[] }>(`/api/bot/search?account_id=${accountId}&q=${encodeURIComponent(q)}`, {}, token),
+
+  exportDialog: (accountId: number, dialogId: number, fmt: string, token: string) =>
+    req<{ key: string; url: string; format: string; count: number }>(
+      `/api/bot/export/${dialogId}?account_id=${accountId}&fmt=${fmt}`,
+      {},
+      token,
+    ),
+
+  analytics: (accountId: number, token: string) =>
+    req<Analytics>(`/api/bot/analytics?account_id=${accountId}`, {}, token),
+
+  backup: (accountId: number, token: string) =>
+    req<{ key: string; url: string; dialogs: number }>(
+      `/api/bot/backup?account_id=${accountId}`,
+      { method: "POST" },
+      token,
+    ),
+
+  autoDeleteGet: (accountId: number, token: string) =>
+    req<{ ttl_seconds: number }>(`/api/bot/auto-delete?account_id=${accountId}`, {}, token),
+
+  autoDeleteSet: (accountId: number, ttlSeconds: number, token: string) =>
+    req<{ ok: boolean; ttl_seconds: number }>(
+      "/api/bot/auto-delete",
+      { method: "POST", body: JSON.stringify({ account_id: accountId, ttl_seconds: ttlSeconds }) },
+      token,
+    ),
 };

@@ -107,6 +107,36 @@ class AppUser(Base):
     auto_reply_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Belgilangan odamlarga yuboriladigan alohida avto-javob matni
     auto_reply_selected_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Avto-javob jadvali (masalan "09:00-18:00"); bo'sh = doim
+    auto_reply_from: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    auto_reply_to: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ScheduledMessage(Base):
+    """Rejalashtirilgan xabar — ma'lum vaqtda avtomatik yuboriladi."""
+
+    __tablename__ = "scheduled_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
+    dialog_id: Mapped[int] = mapped_column(ForeignKey("dialogs.id", ondelete="CASCADE"), index=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    media_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    media_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    send_at: Mapped[datetime] = mapped_column(DateTime)
+    sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class AutoDeleteRule(Base):
+    """Avto-o'chirish: yuborilgan xabarlar N soniyadan keyin o'chiriladi."""
+
+    __tablename__ = "auto_delete_rules"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), unique=True)
+    ttl_seconds: Mapped[int] = mapped_column(Integer, default=0)  # 0 = o'chirilgan
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 

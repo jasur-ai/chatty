@@ -15,10 +15,10 @@ import {
   IconX,
 } from "../icons";
 import { useStore } from "../store";
-import type { AdminAccount, BotSettings, MusicPost } from "../types";
+import type { AdminAccount, Analytics, BotSettings, MusicPost, SearchResult } from "../types";
 import { Avatar } from "./Avatar";
 
-type Tab = "bot" | "auto" | "lotus" | "music" | "admin";
+type Tab = "bot" | "auto" | "pro" | "lotus" | "music" | "admin";
 
 export function Settings() {
   const { current, token, appUser, closeSettings } = useStore();
@@ -43,6 +43,7 @@ export function Settings() {
         <nav className="settings-nav">
           <NavBtn id="bot" icon={<IconBot size={18} />} label="Bot" active={tab === "bot"} onClick={() => setTab("bot")} />
           <NavBtn id="auto" icon={<IconSend size={18} />} label="Avto-javob" active={tab === "auto"} onClick={() => setTab("auto")} />
+          <NavBtn id="pro" icon={<IconStar size={18} />} label="Pro" active={tab === "pro"} onClick={() => setTab("pro")} />
           <NavBtn id="lotus" icon={<IconStar size={18} />} label="Lotus" active={tab === "lotus"} onClick={() => setTab("lotus")} />
           <NavBtn id="music" icon={<IconMusic size={18} />} label="Musiqa" active={tab === "music"} onClick={() => setTab("music")} />
           {isAdmin && (
@@ -53,6 +54,7 @@ export function Settings() {
         <div className="settings-body">
           {tab === "bot" && <BotTab />}
           {tab === "auto" && <AutoTab />}
+          {tab === "pro" && <ProTab />}
           {tab === "lotus" && <LotusTab />}
           {tab === "music" && <MusicTab />}
           {tab === "admin" && isAdmin && <AdminTab />}
@@ -270,6 +272,148 @@ function AutoTab() {
         ))}
         {(!settings?.auto_reply.targets.length) && <div className="muted">Belgilangan odamlar yo'q — hammaga asosiy matn yuboriladi.</div>}
       </div>
+      {msg && <div className="settings-msg">{msg}</div>}
+    </div>
+  );
+}
+
+// ---------------- Pro funksiyalar (barcha foydalanuvchilar uchun) ----------------
+function ProTab() {
+  const { current, token, dialogs } = useStore();
+  const [searchQ, setSearchQ] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [scheduled, setScheduled] = useState<{ id: number; dialog_id: number; text: string; send_at: string }[]>([]);
+  const [schedText, setSchedText] = useState("");
+  const [schedDialog, setSchedDialog] = useState(0);
+  const [schedAt, setSchedAt] = useState("");
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [ttl, setTtl] = useState(0);
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    if (!current || !token) return;
+    void api.scheduledList(current.id, token).then((r) => setScheduled(r.scheduled));
+    void api.analytics(current.id, token).then((a) => setAnalytics(a));
+    void api.autoDeleteGet(current.id, token).then((r) => setTtl(r.ttl_seconds));
+  }, [current, token]);
+
+  if (!current || !token) return null;
+
+  async function doSearch() {
+    if (!searchQ.trim()) return;
+    const r = await api.searchMessages(current!.id, searchQ.trim(), token!);
+    setResults(r.results);
+  }
+
+  async function addSchedule() {
+    if (!schedText.trim() || !schedDialog || !schedAt) return;
+    const send_at = new Date(schedAt).toISOString();
+    await api.scheduleMessage(current!.id, { dialog_id: schedDialog, text: schedText, send_at }, token!);
+    setSchedText("");
+    setSchedAt("");
+    setScheduled((await api.scheduledList(current!.id, token!)).scheduled);
+  }
+
+  async function delSchedule(id: number) {
+    await api.deleteScheduled(id, token!);
+    setScheduled((await api.scheduledList(current!.id, token!)).scheduled);
+  }
+
+  async function doExport(fmt: string) {
+    setMsg("");
+    try {
+      const r = await api.exportDialog(current!.id, schedDialog, fmt, token!);
+      setMsg(`Eksport tayyor: ${r.count} ta xabar — ${r.url}`);
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  }
+
+  async function doBackup() {
+    setMsg("");
+    try {
+      const r = await api.backup(current!.id, token!);
+      setMsg(`Zaxira tayyor: ${r.dialogs} ta chat — ${r.url}`);
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  }
+
+  async function setAutoDelete(v: number) {
+    setTtl(v);
+    await api.autoDeleteSet(current!.id, v, token!);
+  }
+
+  return (
+    <div className="settings-pane">
+      <div className="pane-sub">Rejalashtirilgan xabarlar</div>
+      <div className="target-add">
+        <select className="input" value={schedDialog} onChange={(e) => setSchedDialog(Number(e.target.value))}>
+          <option value={0}>Chat tanlang</option>
+          {dialogs.map((d) => (
+            <option key={d.id} value={d.id}>{d.title}</option>
+          ))}
+        </select>
+        <input className="input" type="datetime-local" value={schedAt} onChange={(e) => setSchedAt(e.target.value)} />
+      </div>
+      <div className="target-add">
+        <input className="input" placeholder="Xabar matni" value={schedText} onChange={(e) => setSchedText(e.target.value)} />
+        <button className="btn primary" onClick={addSchedule}>Rejalash</button>
+      </div>
+      {scheduled.map((s) => (
+        <div className="target-item" key={s.id}>
+          <span>{s.text}</span>
+          <span className="muted">{new Date(s.send_at).toLocaleString()}</span>
+          <button className="icon-btn" onClick={() => void delSchedule(s.id)}><IconTrash size={16} /></button>
+        </div>
+      ))}
+      {scheduled.length === 0 && <div className="muted">Rejalashtirilgan xabar yo'q</div>}
+
+      <div className="pane-sub">Qidiruv (barcha chatlar)</div>
+      <div className="composer-mini">
+        <input className="input" placeholder="Qidiruv..." value={searchQ} onChange={(e) => setSearchQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void doSearch()} />
+        <button className="btn primary" onClick={() => void doSearch()}>Qidirish</button>
+      </div>
+      {results.map((r) => (
+        <div className="target-item" key={`${r.dialog_id}-${r.tg_id}`}>
+          <div>
+            <div className="admin-row-title">{r.dialog_title}</div>
+            <div className="muted">{r.text}</div>
+          </div>
+          <span className="muted">{new Date(r.date).toLocaleString()}</span>
+        </div>
+      ))}
+
+      <div className="pane-sub">Analitika</div>
+      {analytics && (
+        <div className="analytics-grid">
+          <div className="stat"><b>{analytics.total_messages}</b><span>jami xabar</span></div>
+          <div className="stat"><b>{analytics.in_messages}</b><span>kiruvchi</span></div>
+          <div className="stat"><b>{analytics.out_messages}</b><span>chiqim</span></div>
+          <div className="stat"><b>{analytics.dialogs}</b><span>chatlar</span></div>
+        </div>
+      )}
+
+      <div className="pane-sub">Eksport va zaxira</div>
+      <div className="pane-row">
+        <select className="input" value={schedDialog} onChange={(e) => setSchedDialog(Number(e.target.value))}>
+          <option value={0}>Chat tanlang (eksport)</option>
+          {dialogs.map((d) => (
+            <option key={d.id} value={d.id}>{d.title}</option>
+          ))}
+        </select>
+        <button className="btn ghost" disabled={!schedDialog} onClick={() => void doExport("json")}>JSON</button>
+        <button className="btn ghost" disabled={!schedDialog} onClick={() => void doExport("csv")}>CSV</button>
+        <button className="btn ghost" onClick={() => void doBackup()}>To'liq zaxira</button>
+      </div>
+
+      <div className="pane-sub">Avto-o'chirish (yuborilgan xabarlar)</div>
+      <div className="seg">
+        {[{ v: 0, l: "O'chiq" }, { v: 3600, l: "1 soat" }, { v: 86400, l: "24 soat" }, { v: 604800, l: "7 kun" }].map((o) => (
+          <button key={o.v} className={`seg-btn ${ttl === o.v ? "active" : ""}`} onClick={() => void setAutoDelete(o.v)}>{o.l}</button>
+        ))}
+      </div>
+
       {msg && <div className="settings-msg">{msg}</div>}
     </div>
   );

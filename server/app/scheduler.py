@@ -11,8 +11,20 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from .config import settings
-from .db import Account, AdminReport, AppUser, Dialog, Message, Reminder, SessionLocal
+from .db import (
+    Account,
+    AdminReport,
+    AppUser,
+    AutoDeleteRule,
+    Dialog,
+    Message,
+    Reminder,
+    ScheduledMessage,
+    SessionLocal,
+)
 from .notify import notifier
+from .tg.manager import manager
+from .tg.sync import input_peer
 
 log = logging.getLogger("chatty.scheduler")
 
@@ -105,6 +117,82 @@ async def build_report_text(language: str = "uz") -> str:
         return (head + "\n".join(lines)).strip()
 
 
+async def _process_scheduled() -> None:
+    """Muddati kelgan rejalashtirilgan xabarlarni yuboradi."""
+    now = datetime.now(timezone.utc)
+    async with SessionLocal() as db:
+        rows = (
+            await db.execute(
+                select(ScheduledMessage).where(ScheduledMessage.sent.is_(False), ScheduledMessage.send_at <= now)
+            )
+        ).scalars().all()
+    for s in rows:
+        client = manager.get(s.account_id)
+        if client is None:
+            continue
+        async with SessionLocal() as db:
+            dialog = (
+                await db.execute(select(Dialog).where(Dialog.id == s.dialog_id))
+            ).scalar_one_or_none()
+            if dialog is None:
+                continue
+            entity = await client.get_entity(input_peer(dialog.tg_id, dialog.peer_type))
+            try:
+                if s.media_key:
+                    from ..storage import storage  # noqa: PLC0415
+
+                    data, _ = storage.get(s.media_key)
+                    import tempfile
+                    from pathlib import Path
+
+                    ext = Path(s.media_key).suffix or ".bin"
+                    tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+                    try:
+                        tmp.write(data)
+                        tmp.close()
+                        await client.send_file(entity, tmp.name, caption=s.text or None)
+                    finally:
+                        Path(tmp.name).unlink(missing_ok=True)
+                else:
+                    await client.send_message(entity, s.text)
+                s.sent = True
+                await db.commit()
+            except Exception as e:  # noqa: BLE001
+                log.warning("Rejalashtirilgan xabar yuborilmadi: %s", e)
+
+
+async def _process_auto_delete() -> None:
+    """Avto-o'chirish qoidalari: yuborilgan xabarlarni TTL'dan keyin o'chirish."""
+    async with SessionLocal() as db:
+        rules = (await db.execute(select(AutoDeleteRule).where(AutoDeleteRule.ttl_seconds > 0))).scalars().all()
+    for r in rules:
+        client = manager.get(r.account_id)
+        if client is None:
+            continue
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=r.ttl_seconds)
+        async with SessionLocal() as db:
+            msgs = (
+                await db.execute(
+                    select(Message).where(
+                        Message.account_id == r.account_id,
+                        Message.out.is_(True),
+                        Message.date < cutoff,
+                    )
+                )
+            ).scalars().all()
+            for m in msgs:
+                dialog = (
+                    await db.execute(select(Dialog).where(Dialog.id == m.dialog_id))
+                ).scalar_one_or_none()
+                if dialog is None:
+                    continue
+                try:
+                    entity = await client.get_entity(input_peer(dialog.tg_id, dialog.peer_type))
+                    await client.delete_messages(entity, [m.tg_id])
+                except Exception:  # noqa: BLE001
+                    continue
+
+
 async def _run_report() -> None:
     body = await build_report_text()
     async with SessionLocal() as db:
@@ -151,6 +239,8 @@ class Scheduler:
         while True:
             try:
                 await _due_reminders()
+                await _process_scheduled()
+                await _process_auto_delete()
                 now = datetime.now(timezone.utc)
                 interval = timedelta(hours=report_interval_hours())
                 if now - last_report >= interval:

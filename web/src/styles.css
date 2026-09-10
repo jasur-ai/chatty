@@ -1073,3 +1073,61 @@ textarea {
     bottom: 76px;
   }
 }
+
+/* ===== Pro funksiyalar ===== */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.stat {
+  background: var(--input-bg);
+  border-radius: 10px;
+  padding: 12px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat b {
+  font-size: 22px;
+  color: var(--accent);
+}
+
+.stat span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Composer qo'shimcha tugmalar */
+.icon-btn.rec {
+  color: var(--danger);
+  animation: rec-pulse 1s infinite;
+}
+
+@keyframes rec-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.icon-btn.active {
+  color: var(--accent);
+}
+
+.forward-pop {
+  position: absolute;
+  right: 8px;
+  bottom: 64px;
+  width: 300px;
+  max-width: calc(100vw - 24px);
+  background: var(--sidebar-bg);
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 30;
+}

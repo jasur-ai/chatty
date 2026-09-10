@@ -58,12 +58,13 @@ Web app (React PWA)  ⇄  REST + WebSocket  ⇄  FastAPI server  ⇄  MTProto (T
 |---|---|
 | 1. Yadro: login, chatlar, xabarlar, read-receipts, WS, R2 | ✅ tayyor |
 | 2. Chat funksiyalari: media, push-xabarnomalar, story, bot-persona | ✅ tayyor |
-| 3. Avto-javob + so'kinish filtri (warn/block/hide) | ✅ tayyor |
+| 3. Avto-javob + so'kinish filtri (warn/block/hide) + jadval | ✅ tayyor |
 | 4. Admin panel + VIP + adminlar boshqaruvi | ✅ tayyor |
 | 5. Lotus AI 0.0.1 (offline + LLM, ru/uz/en, eslatmalar) + Admin AI hisobot | ✅ tayyor |
 | 6. Pink rejim + final UI | ✅ tayyor |
 | 7. Musiqa taklifi (banner + reaksiya) | ✅ tayyor |
-| 8. 20 ta VIP funksiya | ⏳ tasdiqlash kutilmoqda ([docs/VIP_FEATURES.md](docs/VIP_FEATURES.md)) |
+| 8. Pro funksiyalar (ovozli/dumaloq video, forward, rejalashtirilgan xabar, qidiruv, eksport, analitika, zaxira, avto-o'chirish) | ✅ tayyor — **barcha foydalanuvchilar uchun** |
+| 9. AI (LLM) — VIP uchun | ✅ tayyor — [docs/VIP_FEATURES.md](docs/VIP_FEATURES.md) |
 
 ## Muhim sozlamalar
 
@@ -73,16 +74,18 @@ Login ishlashi uchun `.env` da quyidagilar **majburiy**:
 - `TG_BOT_TOKEN` — xabarnoma boti (@BotFather'dan) — push-xabarnoma va "Javob yozish" tugmasi uchun
 - `OWNER_ID=8004724563`, `ADMIN_IDS=8442078631`
 - `REPORT_INTERVAL_HOURS=2` — Admin AI hisobot oraliq (1/2/4/6/8)
-- `LOTUS_LLM_URL` / `LOTUS_LLM_KEY` — (ixtiyoriy) real AI uchun; bo'sh bo'lsa Lotus offline rejimda ishlaydi
+- `LOTUS_PROVIDER` / `LOTUS_LLM_KEY` — (ixtiyoriy) VIP AI uchun; bo'sh bo'lsa Lotus offline rejimda
 
 ## Xususiyatlar
 
-- **Avto-javob**: yoqish + matn (tayyor takliflar) + "belgilangan odamlar" ro'yxati
+- **Avto-javob**: yoqish + matn (tayyor takliflar) + "belgilangan odamlar" ro'yxati + jadval oynasi
 - **So'kinish filtri**: 1-2 marta ogohlantirish, 3-marta blok; guruhda xabarlar yashiriladi
 - **Bot-persona**: nom/rasm default akkaunt bilan bir xil, keyin alohida o'zgartiriladi; story joylash
+- **Pro funksiyalar** (barchaga): ovozli xabar, dumaloq video, forward, rejalashtirilgan xabar,
+  qidiruv, eksport (JSON/CSV), zaxira, analitika, avto-o'chirish
 - **Admin**: barcha akkauntlar kuzatuvi, VIP (tasdiqlash bilan), admin qo'shish/olib tashlash,
   hisobot oraliq sozlash, hisobotlar tarixi
-- **Lotus 0.0.1**: yordamchi AI (salom/yordam/eslatma/til/hisobot buyruqlari), suzuvchi oyna
+- **Lotus 0.0.1**: yordamchi AI (salom/yordam/eslatma/til/hisobot), suzuvchi oyna; VIP'da LLM xulosa/tarjima
 - **Pink rejim**: id `8442078631` ulanganda butun tizim "pick me pink" rejimga o'tadi
 
 ## Deploy (Render)

@@ -62,6 +62,8 @@ export interface BotSettings {
     enabled: boolean;
     text: string | null;
     selected_text: string | null;
+    schedule_from: string | null;
+    schedule_to: string | null;
     targets: { tg_user_id: number; name: string | null }[];
   };
   suggested_replies: string[];
@@ -87,4 +89,22 @@ export interface AdminAccount {
   app_user: { is_owner: boolean; is_admin: boolean; is_vip: boolean; theme: string };
   dialogs_count: number;
   messages_count: number;
+}
+
+export interface SearchResult {
+  tg_id: number;
+  dialog_id: number;
+  dialog_title: string;
+  text: string;
+  date: string;
+  out: boolean;
+}
+
+export interface Analytics {
+  total_messages: number;
+  out_messages: number;
+  in_messages: number;
+  dialogs: number;
+  by_hour: Record<string, number>;
+  by_day: Record<string, number>;
 }

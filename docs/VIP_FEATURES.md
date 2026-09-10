@@ -1,49 +1,46 @@
-# VIP Premium funksiyalar (20 ta) — tasdiqlash uchun
+# VIP funksiyalar siyosati
 
-> Bu funksiyalar yuqoridagi asosiy funksiyalardan TASHQARI qo'shimcha premium
-> imkoniyatlardir. Har biri `is_vip` bo'lgan foydalanuvchilar uchun ochiladi.
-> Tasdiqlaganingizdan keyin implementatsiya qilinadi.
+> **Qaror (yakuniy):** Barcha asosiy funksiyalar **oddiy foydalanuvchilar uchun ham ochiq**.
+> Faqat **AI (Lotus LLM)** VIP foydalanuvchilarga beriladi.
 
-## Aloqa / Chat
+## Barcha foydalanuvchilar uchun (oddiy + VIP)
 
-1. **Cheksiz akkaunt ulash** — oddiy foydalanuvchi 3 tagacha, VIP cheksiz akkaunt/bot ulaydi.
-2. **AI kontekstli avto-javob** — avto-javob oddiy matn emas, kiruvchi xabarga qarab Lotus
-   kontekstli, tabiiy javob yozadi (LLM rejimida).
-3. **Rejalashtirilgan xabar** — ma'lum vaqtga xabar yozib qo'yish (jadval asosida avtomatik yuboriladi).
-4. **Avto-tarjima** — kiruvchi/chiqim xabarlarni ru/uz/en o'rtasida avtomatik tarjima qilish.
-5. **Ovozli xabar yuborish** — app ichida ovoz yozib (voice) yuborish.
-6. **Dumaloq video yuborish** — app ichida video-note (round video) yozib yuborish.
-7. **Stiker/GIF kutubxonasi** — tez-tez ishlatiladigan stiker/reaksiya tezkor paneli.
-8. **Ko'p chatga forward** — bitta xabarni bir nechta chatga birdaniga yo'naltirish.
+- Bot-persona: nom/rasm/story o'zgartirish
+- Avto-javob (matn + takliflar + belgilangan odamlar + jadval)
+- So'kinish filtri (warn/block/hide)
+- Media yuborish: rasm, video, audio, fayl
+- **Ovozli xabar** va **dumaloq video** yozib yuborish
+- **Forward** (bir nechta chatga)
+- **Rejalashtirilgan xabarlar** (jadval)
+- **Qidiruv** (barcha chatlar bo'yicha)
+- **Eksport** (JSON/CSV) va **to'liq zaxira**
+- **Analitika** (xabarlar, faol soatlar, kunlik trend)
+- **Avto-o'chirish** (yuborilgan xabarlar TTL)
+- Musiqa taklifi + reaksiya
 
-## Tashkilot / Mahsuldorlik
+## VIP uchun
 
-9. **Barcha chatlar bo'yicha qidiruv** — bir akkauntdagi hamma chat/xabarlardan qidirish.
-10. **Chat tarixini eksport qilish** — istalgan chatni CSV/JSON ko'rinishda yuklab olish.
-11. **Avto-o'chirish** — yuborilgan xabarlar belgilangan vaqtdan keyin avtomatik o'chiriladi.
-12. **Avto-javob jadvali** — avto-javob faqat ma'lum soatlarda ishlaydi (masalan: 9:00–18:00).
-13. **Xabarlarni xulosa qilish** — uzun chat/yozishmalarni Lotus yordamida qisqa xulosaga olish.
-14. **Chat zaxirasi/qayta tiklash** — barcha chatlarni R2'ga zaxiralash va tiklash.
+- **Lotus real AI (LLM)** — Groq/OpenRouter/Gemini orqali:
+  - Aqlli kontekstli javoblar (salom/yordam/... dan tashqari erkin suhbat)
+  - Xabarlarni **xulosa qilish**
+  - **Tarjima** (uz/ru/en)
+  - AI kontekstli avto-javob (kiruvchi xabarga qarab tabiiy javob)
 
-## Analitika / Shaxsiylashtirish
+Oddiy foydalanuvchilarda Lotus **offline rejimda** ishlaydi (buyruqlar: salom, yordam,
+eslatma, til, hisobot) — hech qanday AI kalitisiz.
 
-15. **Kengaytirilgan analitika** — xabarlar soni, javob vaqti, faol soatlar grafiklari.
-16. **Tezkor push-xabarnoma** — oddiy foydalanuvchiga batched (yig'ma), VIP'ga bir zumda push.
-17. **Shaxsiy AI uslubi** — Lotus foydalanuvchining yozish uslubiga moslashadi (fine-tune).
-18. **Maxsus mavzular** — default/pink'dan tashqari shaxsiy rang mavzulari.
+## LLM sozlash
 
-## Imtiyozlar
+`.env` da:
 
-19. **Yangi funksiyalarga erta kirish** — yangi chiqqan funksiyalar avval VIP'larga ochiladi.
-20. **Maxsus qo'llab-quvvatlash** — VIP'lar uchun alohida yordam kanali va ustuvorlik.
+```
+LOTUS_PROVIDER=groq       # groq | openrouter | gemini | custom
+LOTUS_LLM_KEY=<sizning-key>
+LOTUS_LLM_MODEL=llama-3.3-70b-versatile
+```
 
----
+- **Groq** (tavsiya): https://console.groq.com → tekin, karta shart emas, juda tez
+- **OpenRouter**: https://openrouter.ai → `:free` modellar tekin
+- **Gemini**: Google AI Studio → tekin (~1500 req/kun)
 
-## AI (Lotus) VIP integratsiyasi
-
-VIP foydalanuvchi Lotus'ning to'liq imkoniyatlariga ega bo'ladi:
-- Real LLM (LOTUS_LLM_URL sozlanganda) orqali aqlli javoblar;
-- Voice chat (STT/TTS) to'liq yoqiladi;
-- AI xabarlarni xulosa qiladi, javob taklif qiladi, eslatmalarni boshqaradi.
-
-Oddiy foydalanuvchida Lotus offline (buyruqlar) rejimida ishlaydi.
+`LOTUS_LLM_KEY` bo'sh qolsa tizim to'liq offline ishlaydi (xatolik bermaydi).
