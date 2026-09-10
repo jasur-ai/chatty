@@ -81,6 +81,14 @@ async def ws_endpoint(ws: WebSocket):
 
 
 # Prod'da web build'ini xizmat qilish (web/dist mavjud bo'lsa)
-_web_dist = Path(__file__).resolve().parent.parent.parent / "web" / "dist"
-if _web_dist.exists():
+# Docker'da web/dist /app/web/dist; lokalda repo/web/dist — ikkalasini ham tekshiramiz.
+import os
+
+_web_dist_candidates = [
+    Path(os.getenv("WEB_DIST", "")),
+    Path(__file__).resolve().parent.parent.parent / "web" / "dist",  # lokal: <repo>/web/dist
+    Path(__file__).resolve().parent.parent / "web" / "dist",  # docker: /app/web/dist
+]
+_web_dist = next((p for p in _web_dist_candidates if p and p.exists()), None)
+if _web_dist:
     app.mount("/", StaticFiles(directory=str(_web_dist), html=True), name="web")

@@ -36,6 +36,14 @@ services:
         value: "8004724563"
       - key: ADMIN_IDS
         value: "8442078631"
+      - key: REPORT_INTERVAL_HOURS
+        value: "2"
+      - key: LOTUS_PROVIDER
+        value: "groq"
+      - key: LOTUS_LLM_KEY
+        sync: false
+      - key: LOTUS_LLM_MODEL
+        value: "qwen/qwen3.8-27b"
       - key: PORT
         value: "8000"
     disk:
