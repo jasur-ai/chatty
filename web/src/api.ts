@@ -3,11 +3,15 @@ import type {
   AdminAccount,
   Analytics,
   BotSettings,
+  Contact,
   Dialog,
+  ForwardRule,
   LoginResult,
   Message,
   MusicPost,
+  QuickReply,
   SearchResult,
+  StarredMsg,
 } from "./types";
 import { API_BASE } from "./env";
 
@@ -267,4 +271,88 @@ export const api = {
       { method: "POST", body: JSON.stringify({ account_id: accountId, ttl_seconds: ttlSeconds }) },
       token,
     ),
+
+  // ---- VIP funksiyalar ----
+  vipEdit: (accountId: number, dialogId: number, msgTgId: number, text: string, token: string) =>
+    req<{ ok: boolean }>("/api/vip/edit", { method: "POST", body: JSON.stringify({ account_id: accountId, dialog_id: dialogId, msg_tg_id: msgTgId, text }) }, token),
+
+  vipDelete: (accountId: number, dialogId: number, msgTgId: number, token: string) =>
+    req<{ ok: boolean }>("/api/vip/delete", { method: "POST", body: JSON.stringify({ account_id: accountId, dialog_id: dialogId, msg_tg_id: msgTgId }) }, token),
+
+  vipPin: (accountId: number, dialogId: number, pinned: boolean, token: string) =>
+    req<{ ok: boolean }>("/api/vip/pin", { method: "POST", body: JSON.stringify({ account_id: accountId, dialog_id: dialogId, pinned }) }, token),
+
+  vipFlags: (accountId: number, dialogId: number, flags: { muted?: boolean; archived?: boolean }, token: string) =>
+    req<{ ok: boolean }>("/api/vip/flags", { method: "POST", body: JSON.stringify({ account_id: accountId, dialog_id: dialogId, ...flags }) }, token),
+
+  vipReact: (accountId: number, dialogId: number, msgTgId: number, reaction: string, token: string) =>
+    req<{ ok: boolean }>("/api/vip/react", { method: "POST", body: JSON.stringify({ account_id: accountId, dialog_id: dialogId, msg_tg_id: msgTgId, reaction }) }, token),
+
+  vipStar: (accountId: number, body: { dialog_id: number; tg_id: number; text: string; dialog_title: string }, token: string) =>
+    req<{ ok: boolean; starred: boolean }>("/api/vip/star", { method: "POST", body: JSON.stringify({ account_id: accountId, ...body }) }, token),
+
+  vipStarred: (accountId: number, token: string) =>
+    req<{ starred: StarredMsg[] }>(`/api/vip/starred?account_id=${accountId}`, {}, token),
+
+  vipStarRemove: (id: number, token: string) =>
+    req<{ ok: boolean }>(`/api/vip/starred/${id}`, { method: "DELETE" }, token),
+
+  vipQuickReplies: (accountId: number, token: string) =>
+    req<{ quick_replies: QuickReply[] }>(`/api/vip/quick-replies?account_id=${accountId}`, {}, token),
+
+  vipQuickReplyAdd: (accountId: number, label: string, text: string, token: string) =>
+    req<{ ok: boolean; id: number }>("/api/vip/quick-replies", { method: "POST", body: JSON.stringify({ account_id: accountId, label, text }) }, token),
+
+  vipQuickReplyRemove: (id: number, token: string) =>
+    req<{ ok: boolean }>(`/api/vip/quick-replies/${id}`, { method: "DELETE" }, token),
+
+  vipThemeGet: (accountId: number, token: string) =>
+    req<{ accent: string; name: string }>(`/api/vip/theme?account_id=${accountId}`, {}, token),
+
+  vipThemeSet: (accountId: number, accent: string, token: string) =>
+    req<{ ok: boolean; accent: string }>("/api/vip/theme", { method: "POST", body: JSON.stringify({ account_id: accountId, accent }) }, token),
+
+  vipMediaGallery: (accountId: number, dialogId: number, token: string) =>
+    req<{ media: { tg_id: number; media_type: string; date: string; out: boolean }[] }>(
+      `/api/vip/media-gallery/${dialogId}?account_id=${accountId}`,
+      {},
+      token,
+    ),
+
+  vipReadReceipts: (accountId: number, dialogId: number, token: string) =>
+    req<{ sent: number; read: number; delivered_not_read: number; read_rate: number }>(
+      `/api/vip/read-receipts/${dialogId}?account_id=${accountId}`,
+      {},
+      token,
+    ),
+
+  vipProfile: (accountId: number, body: { first_name?: string; bio?: string; username?: string }, token: string) =>
+    req<{ ok: boolean }>("/api/vip/profile", { method: "POST", body: JSON.stringify({ account_id: accountId, ...body }) }, token),
+
+  vipPoll: (accountId: number, dialogId: number, question: string, options: string[], token: string) =>
+    req<{ ok: boolean }>("/api/vip/poll", { method: "POST", body: JSON.stringify({ account_id: accountId, dialog_id: dialogId, question, options }) }, token),
+
+  vipSticker: (accountId: number, dialogId: number, emoji: string, token: string) =>
+    req<{ ok: boolean }>("/api/vip/sticker", { method: "POST", body: JSON.stringify({ account_id: accountId, dialog_id: dialogId, emoji }) }, token),
+
+  vipContacts: (accountId: number, token: string) =>
+    req<{ contacts: Contact[] }>(`/api/vip/contacts?account_id=${accountId}`, {}, token),
+
+  vipAutoForwardList: (accountId: number, token: string) =>
+    req<{ rules: ForwardRule[] }>(`/api/vip/auto-forward?account_id=${accountId}`, {}, token),
+
+  vipAutoForwardAdd: (accountId: number, body: { keyword: string; source_dialog_id: number; target_dialog_id: number }, token: string) =>
+    req<{ ok: boolean; id: number }>("/api/vip/auto-forward", { method: "POST", body: JSON.stringify({ account_id: accountId, ...body }) }, token),
+
+  vipAutoForwardRemove: (id: number, token: string) =>
+    req<{ ok: boolean }>(`/api/vip/auto-forward/${id}`, { method: "DELETE" }, token),
+
+  vipGroupManage: (accountId: number, body: { dialog_id: number; user_id: number; action: string; title?: string }, token: string) =>
+    req<{ ok: boolean }>("/api/vip/group-manage", { method: "POST", body: JSON.stringify({ account_id: accountId, ...body }) }, token),
+
+  vipMembers: (accountId: number, dialogId: number, token: string) =>
+    req<{ members: Contact[] }>(`/api/vip/members/${dialogId}?account_id=${accountId}`, {}, token),
+
+  vipChannelPost: (accountId: number, body: { dialog_id: number; text: string; send_at: string; silent: boolean }, token: string) =>
+    req<{ ok: boolean }>("/api/vip/channel-post", { method: "POST", body: JSON.stringify({ account_id: accountId, ...body }) }, token),
 };

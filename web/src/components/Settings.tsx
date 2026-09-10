@@ -15,15 +15,26 @@ import {
   IconX,
 } from "../icons";
 import { useStore } from "../store";
-import type { AdminAccount, Analytics, BotSettings, MusicPost, SearchResult } from "../types";
+import type {
+  AdminAccount,
+  Analytics,
+  BotSettings,
+  Contact,
+  ForwardRule,
+  MusicPost,
+  QuickReply,
+  SearchResult,
+  StarredMsg,
+} from "../types";
 import { Avatar } from "./Avatar";
 
-type Tab = "bot" | "auto" | "pro" | "lotus" | "music" | "admin";
+type Tab = "bot" | "auto" | "pro" | "lotus" | "music" | "vip" | "admin";
 
 export function Settings() {
   const { current, token, appUser, closeSettings } = useStore();
   const [tab, setTab] = useState<Tab>("bot");
   const isAdmin = !!appUser?.is_admin || !!appUser?.is_owner;
+  const isVip = isAdmin || !!appUser?.is_vip;
 
   if (!current || !token) return null;
 
@@ -46,6 +57,9 @@ export function Settings() {
           <NavBtn id="pro" icon={<IconStar size={18} />} label="Pro" active={tab === "pro"} onClick={() => setTab("pro")} />
           <NavBtn id="lotus" icon={<IconStar size={18} />} label="Lotus" active={tab === "lotus"} onClick={() => setTab("lotus")} />
           <NavBtn id="music" icon={<IconMusic size={18} />} label="Musiqa" active={tab === "music"} onClick={() => setTab("music")} />
+          {isVip && (
+            <NavBtn id="vip" icon={<IconCrown size={18} />} label="VIP" active={tab === "vip"} onClick={() => setTab("vip")} />
+          )}
           {isAdmin && (
             <NavBtn id="admin" icon={<IconCrown size={18} />} label="Admin" active={tab === "admin"} onClick={() => setTab("admin")} />
           )}
@@ -57,6 +71,7 @@ export function Settings() {
           {tab === "pro" && <ProTab />}
           {tab === "lotus" && <LotusTab />}
           {tab === "music" && <MusicTab />}
+          {tab === "vip" && isVip && <VipTab />}
           {tab === "admin" && isAdmin && <AdminTab />}
         </div>
       </div>
@@ -574,6 +589,251 @@ function MusicTab() {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+// ---------------- VIP (20 mustaqil funksiya) ----------------
+function VipTab() {
+  const { current, token, dialogs } = useStore();
+  const [accent, setAccent] = useState("#3390ec");
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
+  const [qrLabel, setQrLabel] = useState("");
+  const [qrText, setQrText] = useState("");
+  const [starred, setStarred] = useState<StarredMsg[]>([]);
+  const [rules, setRules] = useState<ForwardRule[]>([]);
+  const [afKeyword, setAfKeyword] = useState("");
+  const [afTarget, setAfTarget] = useState(0);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [members, setMembers] = useState<Contact[]>([]);
+  const [membersDialog, setMembersDialog] = useState(0);
+  const [receipts, setReceipts] = useState<{ sent: number; read: number; delivered_not_read: number; read_rate: number } | null>(null);
+  const [receiptsDialog, setReceiptsDialog] = useState(0);
+  const [media, setMedia] = useState<{ tg_id: number; media_type: string; date: string }[]>([]);
+  const [mediaDialog, setMediaDialog] = useState(0);
+  const [groupAction, setGroupAction] = useState("kick");
+  const [groupUserId, setGroupUserId] = useState("");
+  const [groupDialog, setGroupDialog] = useState(0);
+  const [pollQ, setPollQ] = useState("");
+  const [pollOpts, setPollOpts] = useState("");
+  const [pollDialog, setPollDialog] = useState(0);
+  const [sticker, setSticker] = useState("");
+  const [stickerDialog, setStickerDialog] = useState(0);
+  const [bio, setBio] = useState("");
+  const [username, setUsername] = useState("");
+  const [chanText, setChanText] = useState("");
+  const [chanDialog, setChanDialog] = useState(0);
+  const [chanAt, setChanAt] = useState("");
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    if (!current || !token) return;
+    void api.vipQuickReplies(current.id, token).then((r) => setQuickReplies(r.quick_replies));
+    void api.vipStarred(current.id, token).then((r) => setStarred(r.starred));
+    void api.vipAutoForwardList(current.id, token).then((r) => setRules(r.rules));
+    void api.vipThemeGet(current.id, token).then((r) => setAccent(r.accent));
+  }, [current, token]);
+
+  if (!current || !token) return null;
+
+  async function run(fn: () => Promise<unknown>, ok = "Bajarildi") {
+    setMsg("");
+    try {
+      await fn();
+      setMsg(ok);
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  }
+
+  async function addQuickReply() {
+    if (!qrLabel.trim() || !qrText.trim()) return;
+    await api.vipQuickReplyAdd(current!.id, qrLabel, qrText, token!);
+    setQrLabel("");
+    setQrText("");
+    setQuickReplies((await api.vipQuickReplies(current!.id, token!)).quick_replies);
+  }
+
+  async function addRule() {
+    if (!afKeyword.trim() || !afTarget) return;
+    await api.vipAutoForwardAdd(current!.id, { keyword: afKeyword, source_dialog_id: 0, target_dialog_id: afTarget }, token!);
+    setAfKeyword("");
+    setRules((await api.vipAutoForwardList(current!.id, token!)).rules);
+  }
+
+  return (
+    <div className="settings-pane">
+      <div className="pane-sub">Shaxsiy mavzu</div>
+      <div className="pane-row">
+        {["#3390ec", "#f06292", "#7c4dff", "#00b894", "#e17055", "#00a8ff"].map((c) => (
+          <button
+            key={c}
+            className="color-swatch"
+            style={{ background: c, outline: accent === c ? `3px solid ${c}` : "none" }}
+            onClick={() => void run(() => api.vipThemeSet(current!.id, c, token!), "Mavzu saqlandi")}
+          />
+        ))}
+      </div>
+
+      <div className="pane-sub">Tezkor javoblar</div>
+      <div className="target-add">
+        <input className="input" placeholder="Yorliq" value={qrLabel} onChange={(e) => setQrLabel(e.target.value)} />
+        <input className="input" placeholder="Matn" value={qrText} onChange={(e) => setQrText(e.target.value)} />
+        <button className="btn primary" onClick={addQuickReply}>Qo'shish</button>
+      </div>
+      {quickReplies.map((q) => (
+        <div className="target-item" key={q.id}>
+          <b>{q.label}</b>
+          <span>{q.text}</span>
+          <button className="icon-btn" onClick={() => void run(() => api.vipQuickReplyRemove(q.id, token!).then(() => setQuickReplies((prev) => prev.filter((x) => x.id !== q.id))))}>
+            <IconTrash size={16} />
+          </button>
+        </div>
+      ))}
+
+      <div className="pane-sub">Avto-forward qoidalari</div>
+      <div className="target-add">
+        <input className="input" placeholder="Kalit so'z" value={afKeyword} onChange={(e) => setAfKeyword(e.target.value)} />
+        <select className="input" value={afTarget} onChange={(e) => setAfTarget(Number(e.target.value))}>
+          <option value={0}>Target chat</option>
+          {dialogs.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
+        </select>
+        <button className="btn primary" onClick={addRule}>Qo'shish</button>
+      </div>
+      {rules.map((r) => (
+        <div className="target-item" key={r.id}>
+          <b>{r.keyword}</b>
+          <span className="muted">→ chat #{r.target_dialog_id}</span>
+          <button className="icon-btn" onClick={() => void run(() => api.vipAutoForwardRemove(r.id, token!).then(() => setRules((prev) => prev.filter((x) => x.id !== r.id))))}>
+            <IconTrash size={16} />
+          </button>
+        </div>
+      ))}
+
+      <div className="pane-sub">Yulduzchalangan xabarlar ({starred.length})</div>
+      {starred.map((s) => (
+        <div className="target-item" key={s.id}>
+          <div><div className="admin-row-title">{s.dialog_title}</div><div className="muted">{s.text}</div></div>
+          <button className="icon-btn" onClick={() => void run(() => api.vipStarRemove(s.id, token!).then(() => setStarred((prev) => prev.filter((x) => x.id !== s.id))))}>
+            <IconTrash size={16} />
+          </button>
+        </div>
+      ))}
+      {starred.length === 0 && <div className="muted">Yulduzchalangan xabar yo'q (xabardagi yulduzcha tugmasi bilan qo'shiladi)</div>}
+
+      <div className="pane-sub">Profil tahriri</div>
+      <div className="target-add">
+        <input className="input" placeholder="Username (yangi)" value={username} onChange={(e) => setUsername(e.target.value)} />
+        <input className="input" placeholder="Bio" value={bio} onChange={(e) => setBio(e.target.value)} />
+        <button className="btn primary" onClick={() => void run(() => api.vipProfile(current!.id, { bio: bio || undefined, username: username || undefined }, token!))}>
+          Saqlash
+        </button>
+      </div>
+
+      <div className="pane-sub">Guruh boshqaruvi</div>
+      <div className="target-add">
+        <select className="input" value={groupDialog} onChange={(e) => setGroupDialog(Number(e.target.value))}>
+          <option value={0}>Guruh</option>
+          {dialogs.filter((d) => d.type !== "user").map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
+        </select>
+        <select className="input" value={groupAction} onChange={(e) => setGroupAction(e.target.value)}>
+          {["kick", "ban", "unban", "promote", "demote"].map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <input className="input" placeholder="User ID" value={groupUserId} onChange={(e) => setGroupUserId(e.target.value)} />
+        <button className="btn primary" onClick={() => void run(() => api.vipGroupManage(current!.id, { dialog_id: groupDialog, user_id: Number(groupUserId), action: groupAction }, token!))}>
+          Bajarish
+        </button>
+      </div>
+
+      <div className="pane-sub">Guruh a'zolari</div>
+      <div className="target-add">
+        <select className="input" value={membersDialog} onChange={(e) => setMembersDialog(Number(e.target.value))}>
+          <option value={0}>Guruh</option>
+          {dialogs.filter((d) => d.type !== "user").map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
+        </select>
+        <button className="btn primary" onClick={() => void run(() => api.vipMembers(current!.id, membersDialog, token!).then((r) => setMembers(r.members)), "Yuklandi")}>
+          Ro'yxat
+        </button>
+      </div>
+      {members.length > 0 && <div className="muted">{members.length} ta a'zo</div>}
+
+      <div className="pane-sub">Kontaktlar</div>
+      <button className="btn ghost" onClick={() => void run(() => api.vipContacts(current!.id, token!).then((r) => setContacts(r.contacts)), "Yuklandi")}>
+        Kontaktlarni yuklash
+      </button>
+      {contacts.length > 0 && <div className="muted">{contacts.length} ta kontakt</div>}
+
+      <div className="pane-sub">O'qish hisoboti (✓/✓✓)</div>
+      <div className="target-add">
+        <select className="input" value={receiptsDialog} onChange={(e) => setReceiptsDialog(Number(e.target.value))}>
+          <option value={0}>Chat</option>
+          {dialogs.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
+        </select>
+        <button className="btn primary" onClick={() => void run(() => api.vipReadReceipts(current!.id, receiptsDialog, token!).then((r) => setReceipts(r)), "Yuklandi")}>
+          Hisobot
+        </button>
+      </div>
+      {receipts && (
+        <div className="analytics-grid">
+          <div className="stat"><b>{receipts.sent}</b><span>yuborilgan</span></div>
+          <div className="stat"><b>{receipts.read}</b><span>o'qilgan</span></div>
+          <div className="stat"><b>{receipts.read_rate}%</b><span>o'qish darajasi</span></div>
+        </div>
+      )}
+
+      <div className="pane-sub">Media galereya</div>
+      <div className="target-add">
+        <select className="input" value={mediaDialog} onChange={(e) => setMediaDialog(Number(e.target.value))}>
+          <option value={0}>Chat</option>
+          {dialogs.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
+        </select>
+        <button className="btn primary" onClick={() => void run(() => api.vipMediaGallery(current!.id, mediaDialog, token!).then((r) => setMedia(r.media)), "Yuklandi")}>
+          Ko'rish
+        </button>
+      </div>
+      {media.length > 0 && <div className="muted">{media.length} ta media</div>}
+
+      <div className="pane-sub">So'rov (poll)</div>
+      <div className="target-add">
+        <select className="input" value={pollDialog} onChange={(e) => setPollDialog(Number(e.target.value))}>
+          <option value={0}>Chat</option>
+          {dialogs.filter((d) => d.type !== "user").map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
+        </select>
+        <input className="input" placeholder="Savol" value={pollQ} onChange={(e) => setPollQ(e.target.value)} />
+        <input className="input" placeholder="Variantlar (vergul bilan)" value={pollOpts} onChange={(e) => setPollOpts(e.target.value)} />
+        <button className="btn primary" onClick={() => void run(() => api.vipPoll(current!.id, pollDialog, pollQ, pollOpts.split(",").map((s) => s.trim()).filter(Boolean), token!))}>
+          Yaratish
+        </button>
+      </div>
+
+      <div className="pane-sub">Stiker/GIF (emoji)</div>
+      <div className="target-add">
+        <select className="input" value={stickerDialog} onChange={(e) => setStickerDialog(Number(e.target.value))}>
+          <option value={0}>Chat</option>
+          {dialogs.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
+        </select>
+        <input className="input" placeholder="Emoji (masalan 👍)" value={sticker} onChange={(e) => setSticker(e.target.value)} />
+        <button className="btn primary" onClick={() => void run(() => api.vipSticker(current!.id, stickerDialog, sticker, token!))}>
+          Yuborish
+        </button>
+      </div>
+
+      <div className="pane-sub">Kanalga rejalashtirilgan post</div>
+      <div className="target-add">
+        <select className="input" value={chanDialog} onChange={(e) => setChanDialog(Number(e.target.value))}>
+          <option value={0}>Kanal</option>
+          {dialogs.filter((d) => d.type === "channel").map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
+        </select>
+        <input className="input" type="datetime-local" value={chanAt} onChange={(e) => setChanAt(e.target.value)} />
+      </div>
+      <div className="target-add">
+        <input className="input" placeholder="Post matni" value={chanText} onChange={(e) => setChanText(e.target.value)} />
+        <button className="btn primary" onClick={() => void run(() => api.vipChannelPost(current!.id, { dialog_id: chanDialog, text: chanText, send_at: new Date(chanAt).toISOString(), silent: false }, token!))}>
+          Rejalash
+        </button>
+      </div>
+
+      {msg && <div className="settings-msg">{msg}</div>}
     </div>
   );
 }

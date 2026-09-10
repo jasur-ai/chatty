@@ -53,12 +53,25 @@ def _check_code_limits(acc: Account) -> None:
         raise ValueError("Juda ko'p urinish — Telegram kod yuborishni vaqtincha to'xtatdi. 30-60 daqiqa kuting.")
 
 
+FREE_ACCOUNT_LIMIT = 3  # oddiy foydalanuvchi uchun maksimal akkaunt soni
+
+
 async def _get_or_create_account(phone: str, api_id: int | None, api_hash: str | None) -> Account:
     async with SessionLocal() as db:
         acc = (
             await db.execute(select(Account).where(Account.phone == phone))
         ).scalar_one_or_none()
         if acc is None:
+            # VIP/owner cheksiz, oddiy foydalanuvchi cheklangan (3 ta)
+            existing = (await db.execute(select(Account))).scalars().all()
+            if len(existing) >= FREE_ACCOUNT_LIMIT:
+                users = (await db.execute(select(AppUser))).scalars().all()
+                has_vip = any(u.is_vip or u.is_owner for u in users)
+                if not has_vip:
+                    raise ValueError(
+                        f"Oddiy foydalanuvchi uchun maksimal {FREE_ACCOUNT_LIMIT} ta akkaunt. "
+                        "Ko'proq ulash VIP funksiya."
+                    )
             acc = Account(phone=phone, api_id=api_id, api_hash=api_hash, auth_step="none")
             db.add(acc)
             await db.commit()

@@ -7,7 +7,7 @@ from sqlalchemy import select, update as sa_update
 from telethon import events
 
 from ..config import settings
-from ..db import Account, AppUser, Dialog, Message, SessionLocal
+from ..db import Account, AppUser, AutoForwardRule, Dialog, Message, SessionLocal
 from ..notify import media_brief, notifier
 from ..security import decrypt_session
 from ..ws import ws_manager
@@ -46,6 +46,8 @@ async def on_new_message(event: events.NewMessage.Event, account_id: int) -> Non
             hidden = await apply_incoming(event.client, account_id, peer, msg)
         except Exception as e:  # noqa: BLE001
             log.warning("Filtr/avto-javob xatosi: %s", e)
+        # VIP avto-forward qoidalari
+        asyncio.create_task(_apply_auto_forward(event.client, account_id, chat, msg))
 
     # 2) DB'ga yozish
     async with SessionLocal() as db:
@@ -90,6 +92,39 @@ async def on_new_message(event: events.NewMessage.Event, account_id: int) -> Non
                             button_url=settings.bot_reply_url or None,
                         )
                     )
+
+
+async def _apply_auto_forward(client, account_id: int, chat, msg) -> None:
+    """Kalit so'z bo'yicha avto-forward qoidalarini qo'llaydi (VIP)."""
+    text = (msg.message or "").lower()
+    if not text:
+        return
+    from .sync import input_peer  # noqa: PLC0415
+
+    async with SessionLocal() as db:
+        rules = (
+            await db.execute(
+                select(AutoForwardRule).where(
+                    AutoForwardRule.account_id == account_id, AutoForwardRule.enabled.is_(True)
+                )
+            )
+        ).scalars().all()
+        for r in rules:
+            if r.keyword.lower() not in text:
+                continue
+            if r.source_dialog_id and r.source_dialog_id != chat.id:
+                continue
+            target = (
+                await db.execute(select(Dialog).where(Dialog.account_id == account_id, Dialog.id == r.target_dialog_id))
+            ).scalar_one_or_none()
+            if target is None:
+                continue
+            try:
+                dst = await client.get_entity(input_peer(target.tg_id, target.peer_type))
+                src = await client.get_entity(input_peer(chat.id, peer_type_of(chat)))
+                await client.forward_messages(dst, messages=msg.id, from_peer=src)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Avto-forward xatosi: %s", e)
 
 
 async def on_message_read(event: events.MessageRead.Event, account_id: int) -> None:

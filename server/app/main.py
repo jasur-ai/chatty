@@ -7,7 +7,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .api import admin, auth, bot, chats, lotus_api
+from .api import admin, auth, bot, chats, lotus_api, vip
 from .config import settings
 from .db import init_db
 from .notify import notifier
@@ -51,6 +51,7 @@ app.include_router(chats.router)
 app.include_router(admin.router)
 app.include_router(bot.router)
 app.include_router(lotus_api.router)
+app.include_router(vip.router)
 
 
 @app.get("/api/health")

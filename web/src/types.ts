@@ -108,3 +108,34 @@ export interface Analytics {
   by_hour: Record<string, number>;
   by_day: Record<string, number>;
 }
+
+export interface QuickReply {
+  id: number;
+  label: string;
+  text: string;
+}
+
+export interface StarredMsg {
+  id: number;
+  dialog_id: number;
+  tg_id: number;
+  text: string;
+  dialog_title: string;
+  created_at: string;
+}
+
+export interface ForwardRule {
+  id: number;
+  keyword: string;
+  source_dialog_id: number;
+  target_dialog_id: number;
+  enabled: boolean;
+}
+
+export interface Contact {
+  id: number;
+  first_name: string | null;
+  last_name: string | null;
+  username: string | null;
+  phone: string | null;
+}

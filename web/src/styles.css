@@ -1131,3 +1131,100 @@ textarea {
   gap: 10px;
   z-index: 30;
 }
+
+/* ===== Xabar harakatlari (VIP) ===== */
+.msg-actions {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.mini-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.bubble-row:hover .mini-btn {
+  opacity: 1;
+}
+
+.msg-menu {
+  position: absolute;
+  right: 0;
+  bottom: 34px;
+  background: var(--bubble-in);
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+  padding: 4px;
+  z-index: 30;
+  min-width: 160px;
+}
+
+.msg-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  text-align: left;
+}
+
+.msg-menu button:hover {
+  background: var(--hover);
+}
+
+.reaction-bar {
+  position: absolute;
+  right: 0;
+  bottom: 34px;
+  background: var(--bubble-in);
+  border-radius: 999px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+  padding: 6px 8px;
+  display: flex;
+  gap: 4px;
+  z-index: 30;
+}
+
+.reaction-bar button {
+  font-size: 18px;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+
+.reaction-bar button:hover {
+  background: var(--hover);
+}
+
+.edit-box {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.edit-box .input {
+  min-width: 180px;
+}
+
+.color-swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+
+.color-swatch:hover {
+  transform: scale(1.12);
+}

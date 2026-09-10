@@ -16,6 +16,7 @@ from .db import (
     AdminReport,
     AppUser,
     AutoDeleteRule,
+    AutoForwardRule,
     Dialog,
     Message,
     Reminder,

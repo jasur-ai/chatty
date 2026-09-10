@@ -42,3 +42,13 @@ async def require_admin(token_account: int, db: AsyncSession) -> AppUser:
     if me is None or not (me.is_owner or me.is_admin):
         raise HTTPException(status_code=403, detail="Faqat admin")
     return me
+
+
+async def require_vip(token_account: int, db: AsyncSession) -> AppUser:
+    """VIP funksiya — faqat VIP foydalanuvchilar (yoki owner/admin)."""
+    me = (
+        await db.execute(select(AppUser).where(AppUser.account_id == token_account))
+    ).scalar_one_or_none()
+    if me is None or not (me.is_vip or me.is_owner or me.is_admin):
+        raise HTTPException(status_code=403, detail="Bu VIP funksiya")
+    return me

@@ -66,6 +66,7 @@ class Dialog(Base):
     last_out: Mapped[bool] = mapped_column(Boolean, default=False)
     pinned: Mapped[bool] = mapped_column(Boolean, default=False)
     muted: Mapped[bool] = mapped_column(Boolean, default=False)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
     unread_max_id: Mapped[int] = mapped_column(BigInteger, default=0)
 
 
@@ -138,6 +139,57 @@ class AutoDeleteRule(Base):
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), unique=True)
     ttl_seconds: Mapped[int] = mapped_column(Integer, default=0)  # 0 = o'chirilgan
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class StarredMessage(Base):
+    """Yulduzchalangan (xatcho'p) xabarlar — VIP."""
+
+    __tablename__ = "starred_messages"
+    __table_args__ = (UniqueConstraint("account_id", "dialog_id", "tg_id", name="uq_star_acc_dialog_tg"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
+    dialog_id: Mapped[int] = mapped_column(BigInteger)
+    tg_id: Mapped[int] = mapped_column(BigInteger)
+    text: Mapped[str] = mapped_column(Text, default="")
+    dialog_title: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class QuickReply(Base):
+    """Tezkor javoblar (shablon) — VIP."""
+
+    __tablename__ = "quick_replies"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
+    label: Mapped[str] = mapped_column(String(64), default="")
+    text: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class AutoForwardRule(Base):
+    """Avto-forward qoidasi: kalit so'z bo'lsa xabarni boshqa chatga yo'naltirish — VIP."""
+
+    __tablename__ = "auto_forward_rules"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
+    keyword: Mapped[str] = mapped_column(String(128), default="")
+    source_dialog_id: Mapped[int] = mapped_column(BigInteger, default=0)  # 0 = barcha chatlar
+    target_dialog_id: Mapped[int] = mapped_column(BigInteger)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class VipTheme(Base):
+    """VIP shaxsiy mavzu (rang sozlamalari)."""
+
+    __tablename__ = "vip_themes"
+
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
+    accent: Mapped[str] = mapped_column(String(16), default="#3390ec")
+    name: Mapped[str] = mapped_column(String(32), default="custom")
 
 
 class AutoReplyTarget(Base):
@@ -240,8 +292,39 @@ class Admin(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+def _migrate(conn) -> None:
+    """Yengil migratsiya: mavjud jadvalga yangi ustunlarni qo'shish (SQLite, sinxron)."""
+    import sqlalchemy as sa  # noqa: PLC0415
+
+    def _cols(table: str) -> set[str]:
+        rows = conn.execute(sa.text(f"PRAGMA table_info({table})")).fetchall()
+        return {r[1] for r in rows}
+
+    def _tables() -> set[str]:
+        rows = conn.execute(sa.text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()
+        return {r[0] for r in rows}
+
+    tables = _tables()
+    if "app_users" in tables:
+        cols = _cols("app_users")
+        if "auto_reply_from" not in cols:
+            conn.execute(sa.text("ALTER TABLE app_users ADD COLUMN auto_reply_from VARCHAR(5)"))
+        if "auto_reply_to" not in cols:
+            conn.execute(sa.text("ALTER TABLE app_users ADD COLUMN auto_reply_to VARCHAR(5)"))
+    if "dialogs" in tables:
+        cols = _cols("dialogs")
+        if "archived" not in cols:
+            conn.execute(sa.text("ALTER TABLE dialogs ADD COLUMN archived BOOLEAN DEFAULT 0"))
+
+
 async def init_db() -> None:
     async with engine.begin() as conn:
+        # SQLite uchun migratsiya (yangi ustunlar)
+        if settings.database_url.startswith("sqlite"):
+            try:
+                await conn.run_sync(_migrate)
+            except Exception:
+                pass  # yangi DB bo'lsa jadval hali yo'q — create_all yaratadi
         await conn.run_sync(Base.metadata.create_all)
 
 
