@@ -40,7 +40,7 @@ class Settings:
     lotus_provider: str = os.getenv("LOTUS_PROVIDER", "groq")  # groq|openrouter|gemini|custom
     lotus_llm_url: str = os.getenv("LOTUS_LLM_URL", "")
     lotus_llm_key: str = os.getenv("LOTUS_LLM_KEY", "")
-    lotus_llm_model: str = os.getenv("LOTUS_LLM_MODEL", "llama-3.3-70b-versatile")
+    lotus_llm_model: str = os.getenv("LOTUS_LLM_MODEL", "qwen/qwen3.8-27b")
 
     # Admin AI hisobot oraliq (soat) — 1/2/4/6/8
     report_interval_hours: int = int(os.getenv("REPORT_INTERVAL_HOURS", "2"))
