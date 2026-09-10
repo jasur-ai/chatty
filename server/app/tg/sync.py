@@ -151,16 +151,13 @@ async def upsert_dialog(db, account_id: int, entity, *, unread_count: int = 0) -
 
 
 async def download_dialog_photo(client, entity, db, dialog: Dialog) -> None:
-    """Dialog avatar rasmini yuklab olib saqlaydi (kichik thumbnail — tez)."""
+    """Dialog avatar rasmini yuklab olib saqlaydi (kichik rasm — tez)."""
     try:
         photo = getattr(entity, "photo", None)
         if photo is None:
             return
-        # Kichik (thumbnail) rasm — chatlar ro'yxati uchun yetarli va tez yuklanadi
-        loc = getattr(photo, "photo_small", None) or getattr(photo, "photo_big", None)
-        if loc is None:
-            return
-        data = await client.download_file(loc, file=io.BytesIO())
+        # download_big=False — kichik (thumbnail) versiya, chatlar ro'yxati uchun yetarli va tez
+        data = await client.download_profile_photo(entity, file=io.BytesIO(), download_big=False)
         if data is None:
             return
         content = data.getvalue() if isinstance(data, io.BytesIO) else bytes(data)
