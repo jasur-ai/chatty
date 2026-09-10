@@ -41,6 +41,16 @@ textarea {
   text-align: center;
 }
 
+.hint {
+  background: var(--hover);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  text-align: left;
+}
+
 /* ===== Splash ===== */
 .splash {
   height: 100%;

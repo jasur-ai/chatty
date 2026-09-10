@@ -133,6 +133,11 @@ export function Login() {
               <br />
               <span className="muted">{phone}</span>
             </p>
+            <div className="hint">
+              Bu raqam Telegram'da faol — kod SMS emas, Telegram ilovasidagi
+              "Telegram" servis chatiga yuboriladi. Chatlar ro'yxatida ko'k
+              samolyot belgili "Telegram" chatini oching, 5 xonali kod shu yerda.
+            </div>
             <input
               className="input"
               type="text"
