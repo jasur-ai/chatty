@@ -1,0 +1,48 @@
+"""Markaziy konfiguratsiya — .env faylidan o'qiladi."""
+import os
+from functools import lru_cache
+
+from dotenv import load_dotenv
+
+load_dotenv()  # server/ .env
+
+
+class Settings:
+    # Telegram
+    tg_api_id: int = int(os.getenv("TG_API_ID", "0"))
+    tg_api_hash: str = os.getenv("TG_API_HASH", "")
+
+    # Cloudflare R2 (S3-compatible)
+    r2_account_id: str = os.getenv("R2_ACCOUNT_ID", "")
+    r2_access_key_id: str = os.getenv("R2_ACCESS_KEY_ID", "")
+    r2_secret_access_key: str = os.getenv("R2_SECRET_ACCESS_KEY", "")
+    r2_bucket: str = os.getenv("R2_BUCKET", "chatty-media")
+    r2_endpoint: str = os.getenv(
+        "R2_ENDPOINT", f"https://{os.getenv('R2_ACCOUNT_ID', '')}.r2.cloudflarestorage.com"
+    )
+    r2_public_url: str = os.getenv("R2_PUBLIC_URL", "")
+
+    # Server
+    host: str = os.getenv("HOST", "0.0.0.0")
+    port: int = int(os.getenv("PORT", "8000"))
+    session_secret: str = os.getenv("SESSION_SECRET", "change-me")
+    jwt_secret: str = os.getenv("JWT_SECRET", "change-me")
+
+    # Admin
+    owner_id: int = int(os.getenv("OWNER_ID", "8004724563"))
+    admin_ids: list[int] = [int(x) for x in os.getenv("ADMIN_IDS", "8442078631").split(",") if x]
+
+    # DB
+    database_url: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/chatty.db")
+
+    @property
+    def r2_enabled(self) -> bool:
+        return bool(self.r2_access_key_id and self.r2_secret_access_key and self.r2_endpoint)
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()

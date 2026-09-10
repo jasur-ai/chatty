@@ -1,0 +1,17 @@
+{
+  "name": "Chatty",
+  "short_name": "Chatty",
+  "description": "Telegram akkauntlarini boshqarish platformasi",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e1621",
+  "theme_color": "#3390ec",
+  "icons": [
+    {
+      "src": "/chatty.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
