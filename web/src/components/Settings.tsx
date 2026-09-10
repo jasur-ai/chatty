@@ -93,7 +93,6 @@ function NavBtn({ icon, label, active, onClick }: { id?: string; icon: React.Rea
 function BotTab() {
   const { current, token, refreshAccounts } = useStore();
   const [name, setName] = useState("");
-  const [updateTg, setUpdateTg] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const photoRef = useRef<HTMLInputElement>(null);
@@ -112,8 +111,8 @@ function BotTab() {
     setBusy(true);
     setMsg("");
     try {
-      await api.updateBotSettings(current!.id, { bot_name: name, update_tg_profile: updateTg }, token!);
-      setMsg("Saqlangan");
+      await api.updateBotSettings(current!.id, { bot_name: name }, token!);
+      setMsg("Saqlangan — bot nomi Telegram profiliga ham qo'llandi");
       await refreshAccounts();
     } catch (e) {
       setMsg((e as Error).message);
@@ -168,10 +167,10 @@ function BotTab() {
         <span>Bot nomi</span>
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
       </label>
-      <label className="check-row">
-        <input type="checkbox" checked={updateTg} onChange={(e) => setUpdateTg(e.target.checked)} />
-        <span>Telegram profil nomini ham o'zgartirish</span>
-      </label>
+      <div className="hint">
+        Anonimlik: bu nom Telegram profilingizga ham qo'llanadi, shunda suhbatdoshlaringiz
+        xabarlarni akkauntingiz emas, bot nomidan ko'radi.
+      </div>
       <button className="btn primary" disabled={busy} onClick={saveName}>
         Saqlash
       </button>

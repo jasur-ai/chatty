@@ -38,7 +38,6 @@ router = APIRouter(prefix="/api/bot", tags=["bot"])
 class BotSettingsIn(BaseModel):
     account_id: int | None = None
     bot_name: str | None = None
-    update_tg_profile: bool = False  # Telegram profili ham o'zgartirilsinmi
 
 
 @router.get("/settings")

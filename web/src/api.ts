@@ -140,7 +140,7 @@ export const api = {
 
   updateBotSettings: (
     accountId: number,
-    body: { bot_name?: string; update_tg_profile?: boolean },
+    body: { bot_name?: string },
     token: string,
   ) => req<{ account: Account }>("/api/bot/settings", { method: "POST", body: JSON.stringify({ account_id: accountId, ...body }) }, token),
 
