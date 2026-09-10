@@ -32,6 +32,11 @@ services:
         sync: false
       - key: JWT_SECRET
         sync: false
+      - key: DATABASE_URL
+        sync: false
+        # Postgres ishlatilsa (tavsiya — disk'ga qaraganda mustahkam):
+        #   postgresql+asyncpg://user:pass@host:5432/dbname
+        # Bo'sh qolsa SQLite ishlatiladi (faqat persistent disk bilan saqlanadi)
       - key: OWNER_ID
         value: "8004724563"
       - key: ADMIN_IDS
