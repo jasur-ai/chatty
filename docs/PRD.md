@@ -67,8 +67,8 @@ ko'rish, o'qilgan ✓✓ belgilar, media, guruhlar — bularning hammasi MTProto
 
 - [ ] Media yuborish: rasm, video (dumaloq round video), audio, musiqa, fayl
 - [ ] Javob berish (reply), forward
-- [ ] Xabarnomalar: app ochiq bo'lmasa ham push ("3:21 min audio", "matn", "rasm" + **Javob yozish** tugmasi)
-- [ ] Faqat odamlardan kelgan xabarlar push; kanal/guruh xabarlari faqat app ichida
+- [x] Xabarnomalar: app ochiq bo'lmasa push ("3:21 min audio", "matn", "rasm" + **Javob yozish** tugmasi) — bot @chattiey_bot
+- [x] Faqat odamlardan kelgan xabarlar push; kanal/guruh xabarlari faqat app ichida (peer_type==user filtri)
 - [ ] Qidiruv, chat pin, mute
 - [ ] Story yuborish, profil rasmini o'zgartirish
 - [ ] Bot sozlamalari: bot nomi/rasmi (default = user akkaunti bilan bir xil, keyin alohida o'zgartiriladi)

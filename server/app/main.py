@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from .api import admin, auth, chats
 from .config import settings
 from .db import init_db
+from .notify import notifier
 from .security import decode_token
 from .tg.manager import manager
 from .ws import ws_manager
@@ -25,8 +26,10 @@ log = logging.getLogger("chatty")
 async def lifespan(app: FastAPI):
     await init_db()
     await manager.start_all()
+    await notifier.start_polling()
     log.info("Chatty server ishga tushdi")
     yield
+    await notifier.stop()
     await manager.shutdown()
 
 
@@ -47,7 +50,11 @@ app.include_router(admin.router)
 
 @app.get("/api/health")
 async def health():
-    return {"ok": True, "accounts_online": len(manager.clients)}
+    return {
+        "ok": True,
+        "accounts_online": len(manager.clients),
+        "bot_enabled": notifier.enabled,
+    }
 
 
 @app.websocket("/ws")

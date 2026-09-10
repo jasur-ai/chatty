@@ -1,10 +1,13 @@
 """Telethon update handlerlari: xabarlar va o'qilgan holatlar → DB + WebSocket."""
+import asyncio
 import logging
 
 from sqlalchemy import select, update as sa_update
 from telethon import events
 
+from ..config import settings
 from ..db import Account, AppUser, Dialog, Message, SessionLocal
+from ..notify import media_brief, notifier
 from ..security import decrypt_session
 from ..ws import ws_manager
 from .sync import serialize_dialog, serialize_message, update_dialog_last, upsert_dialog, upsert_message
@@ -42,6 +45,30 @@ async def on_new_message(event: events.NewMessage.Event, account_id: int) -> Non
             "message": serialize_message(row),
         }
         await ws_manager.broadcast(account_id, payload)
+
+        # Push-xabarnoma: app ochiq bo'lmasa va chat USER bo'lsa
+        # (kanal/guruh xabarlari faqat app ichida ko'rinadi — spec bo'yicha)
+        if not is_out and dialog.peer_type == "user":
+            connected = ws_manager.connections.get(account_id)
+            if not connected:
+                app_user = (
+                    await db.execute(select(AppUser).where(AppUser.account_id == account_id))
+                ).scalar_one_or_none()
+                owner_chat_id = app_user.tg_user_id if app_user else None
+                if owner_chat_id:
+                    brief = media_brief(msg)
+                    notif_text = (
+                        brief
+                        or (msg.message or "")[:200]
+                        or "Yangi xabar"
+                    )
+                    asyncio.create_task(
+                        notifier.send_notification(
+                            owner_chat_id,
+                            notif_text,
+                            button_url=settings.bot_reply_url or None,
+                        )
+                    )
 
 
 async def on_message_read(event: events.MessageRead.Event, account_id: int) -> None:

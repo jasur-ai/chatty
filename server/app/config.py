@@ -11,6 +11,10 @@ class Settings:
     # Telegram
     tg_api_id: int = int(os.getenv("TG_API_ID", "0"))
     tg_api_hash: str = os.getenv("TG_API_HASH", "")
+    # Xabarnoma boti (Bot API) — push + "Javob yozish" tugmasi uchun
+    tg_bot_token: str = os.getenv("TG_BOT_TOKEN", "")
+    # "Javob yozish" tugmasi ochadigan URL (Chatty app)
+    bot_reply_url: str = os.getenv("BOT_REPLY_URL", "")
 
     # Cloudflare R2 (S3-compatible)
     r2_account_id: str = os.getenv("R2_ACCOUNT_ID", "")
