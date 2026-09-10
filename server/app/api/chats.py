@@ -1,4 +1,6 @@
 """Chatlar, xabarlar va media API."""
+import logging
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -35,6 +37,9 @@ async def chats(
         return {"dialogs": await actions.sync_dialogs(acc)}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:  # noqa: BLE001 — xatoni aniq ko'rsatish uchun
+        logging.getLogger("chatty").exception("Chatlar yuklashda xato")
+        raise HTTPException(status_code=500, detail=f"Chatlarni yuklab bo'lmadi: {e}") from e
 
 
 @router.get("/chats/{dialog_id}/messages")

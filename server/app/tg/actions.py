@@ -1,8 +1,10 @@
 """Chat harakatlari: dialoglar/xabarlar sinxroni, yuborish, o'qilgan qilish."""
+import asyncio
 import io
 import json
 import logging
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -38,16 +40,24 @@ async def sync_dialogs(account_id: int, limit: int = 200) -> list[dict]:
     async with manager.lock(account_id):
         async with SessionLocal() as db:
             dialogs: list[dict] = []
+            # Avatar yuklash uchun qat'iy vaqt byudjeti — chatlar ro'yxati tez qaytishi uchun.
+            # Rasmlar qolgan sinxronizatsiyalarda asta-sekin to'ldiriladi.
+            avatar_deadline = time.monotonic() + 2.5
             async for d in client.iter_dialogs(limit=limit):
                 entity = d.entity
                 dialog = await upsert_dialog(db, account_id, entity, unread_count=d.unread_count)
                 if d.pinned:
                     dialog.pinned = True
-                # Avatar rasmini yuklab olish (agar hali yo'q bo'lsa)
-                if not dialog.photo_key:
+                # Avatar rasmini yuklab olish (agar hali yo'q bo'lsa va vaqt yetarli)
+                if not dialog.photo_key and time.monotonic() < avatar_deadline:
                     from .sync import download_dialog_photo
 
-                    await download_dialog_photo(client, entity, db, dialog)
+                    try:
+                        await asyncio.wait_for(
+                            download_dialog_photo(client, entity, db, dialog), timeout=1.0
+                        )
+                    except Exception:
+                        pass
                 last = d.message
                 if last is not None:
                     await update_dialog_last(db, dialog, last, bool(last.out))
