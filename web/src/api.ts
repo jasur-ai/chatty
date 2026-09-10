@@ -80,6 +80,9 @@ export const api = {
 
   accounts: () => req<{ accounts: Account[] }>("/api/auth/accounts"),
 
+  logout: (accountId: number) =>
+    req<{ ok: boolean }>("/api/auth/logout", { method: "POST", body: JSON.stringify({ account_id: accountId }) }),
+
   chats: (accountId: number, token: string) =>
     req<{ dialogs: Dialog[] }>(`/api/chats?account_id=${accountId}`, {}, token),
 

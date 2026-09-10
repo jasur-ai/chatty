@@ -35,7 +35,7 @@ services:
       - key: OWNER_ID
         value: "8004724563"
       - key: ADMIN_IDS
-        value: "8442078631"
+        value: ""
       - key: REPORT_INTERVAL_HOURS
         value: "2"
       - key: LOTUS_PROVIDER

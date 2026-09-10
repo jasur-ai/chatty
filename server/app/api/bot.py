@@ -66,15 +66,21 @@ async def update_bot_settings(
     acc = (await db.execute(select(Account).where(Account.id == acc_id))).scalar_one()
     if body.bot_name is not None:
         acc.bot_name = body.bot_name
-        if body.update_tg_profile:
-            client = manager.get(acc_id)
-            if client:
-                try:
-                    from telethon import functions
+        # Telegram'da identifikatsiya akkauntning HAQIQIY profili orqali bo'ladi.
+        # Anonimlik uchun akkaunt nomini bot nomiga o'zgartirish KERAK —
+        # shunda odamlarga xabarlar "bot nomidan" ko'rinadi.
+        client = manager.get(acc_id)
+        if client:
+            try:
+                from telethon import functions
 
-                    await client(functions.account.UpdateProfileRequest(first_name=body.bot_name))
-                except Exception:
-                    raise HTTPException(status_code=400, detail="Telegram profili yangilanmadi") from None
+                await client(functions.account.UpdateProfileRequest(
+                    first_name=body.bot_name,
+                    last_name="",
+                ))
+                acc.first_name = body.bot_name
+            except Exception:
+                raise HTTPException(status_code=400, detail="Telegram profili yangilanmadi") from None
     await db.commit()
     return {"account": serialize_account(acc)}
 

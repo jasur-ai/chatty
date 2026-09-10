@@ -12,7 +12,7 @@ function formatTime(iso: string | null): string {
 }
 
 export function ChatList() {
-  const { accounts, current, dialogs, loadingChats, chatsError, selectAccount, openDialog, openSettings } = useStore();
+  const { accounts, current, dialogs, loadingChats, chatsError, selectAccount, openDialog, openSettings, logout } = useStore();
   const [search, setSearch] = useState("");
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
@@ -101,7 +101,7 @@ export function ChatList() {
         <button className="icon-btn" title="Sozlamalar" onClick={openSettings}>
           <IconSettings size={20} />
         </button>
-        <button className="icon-btn" title="Chiqish" onClick={() => window.location.reload()}>
+        <button className="icon-btn" title="Chiqish" onClick={() => void logout()}>
           <IconLogout size={20} />
         </button>
       </footer>

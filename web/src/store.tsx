@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { api, loadTokens, saveToken } from "./api";
+import { api, dropToken, loadTokens, saveToken } from "./api";
 import type { Account, AppUserInfo, Dialog, Message, WsEvent } from "./types";
 import { ChattySocket } from "./ws";
 
@@ -29,6 +29,7 @@ interface Store {
   closeSettings: () => void;
   openLotus: () => void;
   closeLotus: () => void;
+  logout: () => Promise<void>;
   selectAccount: (id: number) => void;
   openDialog: (d: Dialog) => void;
   backToList: () => void;
@@ -265,6 +266,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const openLotus = useCallback(() => setLotusOpen(true), []);
   const closeLotus = useCallback(() => setLotusOpen(false), []);
 
+  const logout = useCallback(async () => {
+    if (!current || !token) return;
+    try {
+      await api.logout(current.id);
+    } catch {
+      /* sessiya allaqachon yopilgan bo'lishi mumkin */
+    }
+    dropToken(current.id);
+    socketRef.current?.disconnect();
+    socketRef.current = null;
+    setDialogs([]);
+    setActiveDialog(null);
+    setMessages([]);
+    setCurrent(null);
+    setAppUser(null);
+    void refreshAccounts();
+  }, [current, token, refreshAccounts]);
+
   const store = useMemo<Store>(
     () => ({
       accounts,
@@ -285,6 +304,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       closeSettings,
       openLotus,
       closeLotus,
+      logout,
       selectAccount,
       openDialog,
       backToList,
@@ -312,6 +332,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       closeSettings,
       openLotus,
       closeLotus,
+      logout,
       selectAccount,
       openDialog,
       backToList,

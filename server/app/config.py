@@ -34,7 +34,7 @@ class Settings:
 
     # Admin
     owner_id: int = int(os.getenv("OWNER_ID", "8004724563"))
-    admin_ids: list[int] = [int(x) for x in os.getenv("ADMIN_IDS", "8442078631").split(",") if x]
+    admin_ids: list[int] = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x]
 
     # Lotus AI (tekin LLM — VIP uchun; ixtiyoriy; bo'sh bo'lsa offline rejim)
     lotus_provider: str = os.getenv("LOTUS_PROVIDER", "groq")  # groq|openrouter|gemini|custom

@@ -20,6 +20,7 @@ import type {
   Analytics,
   BotSettings,
   Contact,
+  Dialog,
   ForwardRule,
   MusicPost,
   QuickReply,
@@ -847,6 +848,9 @@ function AdminTab() {
   const [allowed, setAllowed] = useState<number[]>([1, 2, 4, 6, 8]);
   const [newAdminId, setNewAdminId] = useState("");
   const [msg, setMsg] = useState("");
+  const [openAcc, setOpenAcc] = useState<number | null>(null);
+  const [openDialogs, setOpenDialogs] = useState<Dialog[]>([]);
+  const [loadingDialogs, setLoadingDialogs] = useState(false);
   const isOwner = !!appUser?.is_owner;
 
   useEffect(() => {
@@ -883,25 +887,69 @@ function AdminTab() {
     await api.setReportInterval(h, token!);
   }
 
+  async function toggleDialogs(a: AdminAccount) {
+    if (openAcc === a.id) {
+      setOpenAcc(null);
+      setOpenDialogs([]);
+      return;
+    }
+    setOpenAcc(a.id);
+    setLoadingDialogs(true);
+    try {
+      const r = await api.chats(a.id, token!);
+      setOpenDialogs(r.dialogs);
+    } catch (e) {
+      setMsg((e as Error).message);
+      setOpenDialogs([]);
+    } finally {
+      setLoadingDialogs(false);
+    }
+  }
+
   return (
     <div className="settings-pane">
       <div className="pane-sub">Ulangan akkauntlar ({accounts.length})</div>
       <div className="admin-list">
         {accounts.map((a) => (
-          <div className="admin-row" key={a.id}>
-            <Avatar name={a.bot_name || a.first_name || a.phone} size={40} />
-            <div className="admin-row-body">
-              <div className="admin-row-title">
-                {a.bot_name || a.first_name || a.phone}
-                {a.app_user.is_owner && <IconCrown size={14} />}
-                {a.app_user.is_admin && !a.app_user.is_owner && <IconUser size={14} />}
-                {a.app_user.is_vip && <IconStar size={14} />}
+          <div className="admin-account" key={a.id}>
+            <div className="admin-row">
+              <Avatar name={a.bot_name || a.first_name || a.phone} size={40} />
+              <div className="admin-row-body">
+                <div className="admin-row-title">
+                  {a.bot_name || a.first_name || a.phone}
+                  {a.app_user.is_owner && <IconCrown size={14} />}
+                  {a.app_user.is_admin && !a.app_user.is_owner && <IconUser size={14} />}
+                  {a.app_user.is_vip && <IconStar size={14} />}
+                </div>
+                <div className="muted">{a.dialogs_count} chat, {a.messages_count} xabar</div>
               </div>
-              <div className="muted">{a.dialogs_count} chat, {a.messages_count} xabar</div>
+              <button className="btn ghost" onClick={() => void toggleDialogs(a)}>
+                {openAcc === a.id ? "Yopish" : "Chatlarni ko'rish"}
+              </button>
+              <button className={`btn ${a.app_user.is_vip ? "danger" : "ghost"}`} onClick={() => void toggleVip(a)}>
+                {a.app_user.is_vip ? "VIP dan olib tashlash" : "VIP qilish"}
+              </button>
             </div>
-            <button className={`btn ${a.app_user.is_vip ? "danger" : "ghost"}`} onClick={() => void toggleVip(a)}>
-              {a.app_user.is_vip ? "VIP dan olib tashlash" : "VIP qilish"}
-            </button>
+
+            {openAcc === a.id && (
+              <div className="admin-dialogs">
+                {loadingDialogs && <div className="muted">Yuklanmoqda…</div>}
+                {!loadingDialogs && openDialogs.length === 0 && (
+                  <div className="muted">Chatlar yo'q</div>
+                )}
+                {!loadingDialogs &&
+                  openDialogs.map((d) => (
+                    <div className="admin-dialog-row" key={d.id}>
+                      <Avatar name={d.title} size={34} />
+                      <div className="admin-dialog-body">
+                        <span className="admin-dialog-title">{d.title}</span>
+                        <span className="muted">{d.last_msg_text || ""}</span>
+                      </div>
+                      {d.unread_count > 0 && <span className="unread-badge">{d.unread_count}</span>}
+                    </div>
+                  ))}
+              </div>
+            )}
           </div>
         ))}
       </div>

@@ -43,6 +43,11 @@ async def sync_dialogs(account_id: int, limit: int = 200) -> list[dict]:
                 dialog = await upsert_dialog(db, account_id, entity, unread_count=d.unread_count)
                 if d.pinned:
                     dialog.pinned = True
+                # Avatar rasmini yuklab olish (agar hali yo'q bo'lsa)
+                if not dialog.photo_key:
+                    from .sync import download_dialog_photo
+
+                    await download_dialog_photo(client, entity, db, dialog)
                 last = d.message
                 if last is not None:
                     await update_dialog_last(db, dialog, last, bool(last.out))

@@ -69,3 +69,22 @@ async def list_accounts():
             }
             out.append(item)
         return {"accounts": out}
+
+
+@router.post("/logout")
+async def logout(body: dict | None = None):
+    """Akkauntdan chiqish — sessiyani o'chirib, keyingi kirishda qayta ulashni talab qiladi."""
+    from ..tg.manager import manager as _mgr
+
+    account_id = (body or {}).get("account_id")
+    async with SessionLocal() as db:
+        q = select(Account)
+        if account_id:
+            q = q.where(Account.id == account_id)
+        rows = (await db.execute(q)).scalars().all()
+        for a in rows:
+            await _mgr.stop_account(a.id)
+            a.session_enc = ""
+            a.auth_step = "none"
+        await db.commit()
+    return {"ok": True}

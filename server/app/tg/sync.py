@@ -150,6 +150,27 @@ async def upsert_dialog(db, account_id: int, entity, *, unread_count: int = 0) -
     return row
 
 
+async def download_dialog_photo(client, entity, db, dialog: Dialog) -> None:
+    """Dialog avatar rasmini yuklab olib saqlaydi (R2 yoki lokal)."""
+    try:
+        from telethon.tl.types import User, Chat, Channel  # noqa: PLC0415
+
+        photo = getattr(entity, "photo", None)
+        if photo is None:
+            return
+        data = await client.download_profile_photo(entity, file=io.BytesIO())
+        if data is None:
+            return
+        content = data.getvalue() if isinstance(data, io.BytesIO) else bytes(data)
+        if not content:
+            return
+        key = storage.put(content, "image/jpeg", ".jpg")
+        dialog.photo_key = key
+    except Exception:
+        # avatar yuklab bo'lmasa o'tkazib yuboramiz (xato emas)
+        return
+
+
 async def upsert_message(db, client, account_id: int, dialog: Dialog, msg, *, hidden: bool = False) -> Message:
     tg_id = msg.id
     row = (
