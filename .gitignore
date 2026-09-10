@@ -19,6 +19,7 @@ build/
 node_modules/
 web/dist/
 web/.vite/
+*.tsbuildinfo
 
 # Editor / OS
 .vscode/
@@ -30,4 +31,4 @@ Thumbs.db
 # Runtime
 data/
 *.sqlite3
-*.db*.tsbuildinfo
+*.db
