@@ -9,6 +9,7 @@ import type {
   MusicPost,
   SearchResult,
 } from "./types";
+import { API_BASE } from "./env";
 
 const TOKEN_KEY = "chatty_tokens";
 
@@ -38,7 +39,7 @@ async function req<T>(path: string, init: RequestInit = {}, token?: string): Pro
     ...(init.headers as Record<string, string>),
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(path, { ...init, headers });
+  const res = await fetch(API_BASE + path, { ...init, headers });
   if (!res.ok) {
     let detail = res.statusText;
     try {

@@ -1,3 +1,4 @@
+import { wsUrl } from "./env";
 import type { WsEvent } from "./types";
 
 export class ChattySocket {
@@ -18,8 +19,7 @@ export class ChattySocket {
 
   private open() {
     if (!this.token) return;
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    this.ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(this.token)}`);
+    this.ws = new WebSocket(wsUrl(this.token));
     this.ws.onmessage = (e) => {
       try {
         this.onEvent(JSON.parse(e.data) as WsEvent);

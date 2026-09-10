@@ -1,46 +1,52 @@
-# VIP funksiyalar siyosati
+# VIP AI funksiyalar (20 ta) — tasdiqlash uchun
 
-> **Qaror (yakuniy):** Barcha asosiy funksiyalar **oddiy foydalanuvchilar uchun ham ochiq**.
-> Faqat **AI (Lotus LLM)** VIP foydalanuvchilarga beriladi.
+> Sizning qoidangiz bo'yicha: barcha asosiy funksiyalar oddiy foydalanuvchilarga ham
+> ochiq; **faqat AI (Lotus LLM) VIP'ga**. Quyidagi 20 ta funksiya shu qoidaga mos —
+> deyarli barchasi AI (LLM) quvvatiga tayanadi. Qaysilarini "qo'sh" desangiz,
+> o'shalarini implementatsiya qilaman.
 
-## Barcha foydalanuvchilar uchun (oddiy + VIP)
+## A. Chat aql-zakovati (AI)
 
-- Bot-persona: nom/rasm/story o'zgartirish
-- Avto-javob (matn + takliflar + belgilangan odamlar + jadval)
-- So'kinish filtri (warn/block/hide)
-- Media yuborish: rasm, video, audio, fayl
-- **Ovozli xabar** va **dumaloq video** yozib yuborish
-- **Forward** (bir nechta chatga)
-- **Rejalashtirilgan xabarlar** (jadval)
-- **Qidiruv** (barcha chatlar bo'yicha)
-- **Eksport** (JSON/CSV) va **to'liq zaxira**
-- **Analitika** (xabarlar, faol soatlar, kunlik trend)
-- **Avto-o'chirish** (yuborilgan xabarlar TTL)
-- Musiqa taklifi + reaksiya
+1. **Chat xulosasi** — istalgan chatning uzoq tarixini Lotus AI qisqa xulosaga keltiradi (kunlik/haftalik).
+2. **AI kontekstli avto-javob** — kiruvchi xabarga qarab tabiiy, mazmunli javob yozadi (oddiy matn emas).
+3. **AI javob taklifi (3 variant)** — yangi xabar kelganda Lotus 3 ta tayyor javob qoralamasi beradi, bitta bosishda yuborasiz.
+4. **AI xabar to'ldiruvchi** — yozayotganingizda gapingizni AI davom ettiradi/tuzatadi.
+5. **AI tarjima (avto)** — kiruvchi/chiqim xabarlarni uz/ru/en o'rtasida avtomatik tarjima qiladi.
 
-## VIP uchun
+## B. Ovoz (voice)
 
-- **Lotus real AI (LLM)** — Groq/OpenRouter/Gemini orqali:
-  - Aqlli kontekstli javoblar (salom/yordam/... dan tashqari erkin suhbat)
-  - Xabarlarni **xulosa qilish**
-  - **Tarjima** (uz/ru/en)
-  - AI kontekstli avto-javob (kiruvchi xabarga qarab tabiiy javob)
+6. **AI ovozli javob (TTS)** — Lotus javoblarini ovozli o'qib beradi.
+7. **Ovozli buyruq (STT)** — ovoz bilan yozasiz, AI matnga aylantirib javob beradi.
 
-Oddiy foydalanuvchilarda Lotus **offline rejimda** ishlaydi (buyruqlar: salom, yordam,
-eslatma, til, hisobot) — hech qanday AI kalitisiz.
+## C. Tahlil (analytics)
 
-## LLM sozlash
+8. **AI sentiment tahlili** — kiruvchi xabarlarning kayfiyatini aniqlaydi (ijobiy/salbiy/neytral).
+9. **AI xabar klassifikatsiyasi** — xabarlarni toifalaydi: savol, shikoyat, buyurtma, salomlashish...
+10. **Kunlik AI hisobot** — foydalanuvchi uchun shaxsiy kunlik xulosa (kim yozdi, nima muhim, nima qoldi).
+11. **Kengaytirilgan analitika grafiklari** — javob vaqti, faol soatlar, kontent turlari bo'yicha vizual hisobot.
 
-`.env` da:
+## D. Avtomatlashtirish
 
-```
-LOTUS_PROVIDER=groq       # groq | openrouter | gemini | custom
-LOTUS_LLM_KEY=<sizning-key>
-LOTUS_LLM_MODEL=llama-3.3-70b-versatile
-```
+12. **AI javob vaqtini optimallashtirish** — Lotus eng yaxshi javob vaqtini tahlil qilib tavsiya beradi.
+13. **Smart spam-filtr** — AI spam/reklamani aniqlab avtomatik mute/blok qiladi.
+14. **AI eskirgan xabarlarni tozalash** — eskirgan/keraksiz xabarlarni AI aniqlab o'chirish taklif qiladi.
+15. **AI kontent rejasi** — bot uchun kunlik/haftalik avtomatik kontent/xabar rejasi tuzadi.
 
-- **Groq** (tavsiya): https://console.groq.com → tekin, karta shart emas, juda tez
-- **OpenRouter**: https://openrouter.ai → `:free` modellar tekin
-- **Gemini**: Google AI Studio → tekin (~1500 req/kun)
+## E. Shaxsiylashtirish
 
-`LOTUS_LLM_KEY` bo'sh qolsa tizim to'liq offline ishlaydi (xatolik bermaydi).
+16. **Shaxsiy AI uslubi** — Lotus'ni sizning yozish uslubingizga (brand voice) moslash.
+17. **Ko'p tilli bot rejimi** — bot foydalanuvchi qaysi tilda yozsa, o'sha tilda javob beradi (avto aniqlash).
+
+## F. Imtiyozlar
+
+18. **Cheksiz akkaunt ulash** — oddiy foydalanuvchi 3 tagacha, VIP cheksiz bot/akkaunt.
+19. **Prioritet push-xabarnoma** — VIP'ga xabarnomalar bir zumda (boshqalarga yig'ma tarzda).
+20. **Yangi AI funksiyalarga erta kirish** — har bir yangi AI funksiya avval VIP'larga ochiladi.
+
+---
+
+## Qo'llanma
+
+- Har bir funksiya `is_vip` tekshiruvi bilan gated (server tomonda `lotus.is_vip()` orqali).
+- Faqat tasdiqlagan funksiyalaringizni implementatsiya qilaman.
+- "Hammasini qo'sh" desangiz ham bo'ladi — barcha 20 tasini bir vaqtda qo'shaman.

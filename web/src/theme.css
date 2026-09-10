@@ -63,6 +63,36 @@
   }
 }
 
+/* Telegram Mini App dark rejim (colorScheme="dark") */
+:root[data-color-scheme="dark"],
+[data-theme="default"][data-color-scheme="dark"] {
+  --accent: #3390ec;
+  --accent-hover: #4b9fea;
+  --sidebar-bg: #17212b;
+  --sidebar-header-bg: #17212b;
+  --chat-bg: #0e1621;
+  --chat-pattern: radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.02) 0, transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(255, 255, 255, 0.02) 0, transparent 40%);
+  --header-bg: #17212b;
+  --bubble-in: #182533;
+  --bubble-out: #2b5278;
+  --bubble-out-text: #f5f5f5;
+  --bubble-in-text: #f5f5f5;
+  --text: #f5f5f5;
+  --text-secondary: #7d8b99;
+  --divider: #0d141c;
+  --hover: #202b36;
+  --active: #2b5278;
+  --input-bg: #242f3d;
+  --unread-badge: #3390ec;
+  --unread-text: #ffffff;
+  --day-chip-bg: rgba(23, 33, 43, 0.92);
+  --day-chip-text: #7d8b99;
+  --scrollbar: rgba(255, 255, 255, 0.15);
+  --danger: #e06c6c;
+  --tick: #6bc46b;
+}
+
 /* Pink rejim — "pick me pink" (admin id 8442078631 uchun) */
 [data-theme="pink"] {
   --accent: #f06292;
