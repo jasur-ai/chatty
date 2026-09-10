@@ -30,4 +30,4 @@ Thumbs.db
 # Runtime
 data/
 *.sqlite3
-*.db
+*.db*.tsbuildinfo
