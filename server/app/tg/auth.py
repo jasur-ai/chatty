@@ -69,6 +69,17 @@ async def start_login(phone: str, api_id: int | None = None, api_hash: str | Non
     except errors.PhoneNumberInvalidError as e:
         await client.disconnect()
         raise ValueError("Telefon raqam noto'g'ri") from e
+    except errors.SendCodeUnavailableError as e:
+        await client.disconnect()
+        raise ValueError(
+            "Raqam uchun kod yuborish usullari vaqtincha tugagan (juda ko'p so'rov). "
+            "30-60 daqiqa kuting va qayta urinib ko'ring."
+        ) from e
+    except errors.PhoneNumberFloodError as e:
+        await client.disconnect()
+        raise ValueError(
+            "Raqam vaqtincha kod olishdan bloklangan (anti-spam). 30-60 daqiqa kuting."
+        ) from e
     except Exception as e:
         await client.disconnect()
         log.error("Kod yuborishda xato: %s", e)
