@@ -21,6 +21,7 @@ interface Store {
   messages: Message[];
   loadingChats: boolean;
   loadingMessages: boolean;
+  chatsError: string;
   token: string | null;
   settingsOpen: boolean;
   lotusOpen: boolean;
@@ -31,7 +32,9 @@ interface Store {
   selectAccount: (id: number) => void;
   openDialog: (d: Dialog) => void;
   backToList: () => void;
-  sendText: (text: string) => Promise<void>;
+  replyTo: Message | null;
+  setReplyTo: (m: Message | null) => void;
+  sendText: (text: string, replyTo?: Message | null) => Promise<void>;
   loadMore: () => Promise<void>;
   addAccount: (account: Account, token: string, appUser: AppUserInfo) => void;
   refreshAccounts: () => Promise<void>;
@@ -52,8 +55,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [dialogs, setDialogs] = useState<Dialog[]>([]);
   const [activeDialog, setActiveDialog] = useState<Dialog | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [replyTo, setReplyToState] = useState<Message | null>(null);
   const [loadingChats, setLoadingChats] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [chatsError, setChatsError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [lotusOpen, setLotusOpen] = useState(false);
   const hasMoreRef = useRef(false);
@@ -96,6 +101,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // ---- Chatlarni yuklash (current o'zgarganda avtomatik) ----
+  const loadChats = useCallback(async (accId: number) => {
+    const t = loadTokens()[accId];
+    if (!t) return;
+    setLoadingChats(true);
+    setChatsError("");
+    try {
+      const res = await api.chats(accId, t);
+      setDialogs(res.dialogs);
+    } catch (e) {
+      setChatsError((e as Error).message || "Chatlarni yuklab bo'lmadi");
+    } finally {
+      setLoadingChats(false);
+    }
+  }, []);
+
+  // current akkaunt o'zgarganda chatlarni avtomatik yuklash
+  // (login, refresh yoki switcher orqali tanlash — barchasi shu effect orqali)
+  useEffect(() => {
+    if (current) void loadChats(current.id);
+  }, [current?.id, loadChats]);
+
   // ---- Akkaunt tanlash ----
   const selectAccount = useCallback(
     async (id: number) => {
@@ -105,20 +132,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setDialogs([]);
       setActiveDialog(null);
       setMessages([]);
-      if (!acc) return;
-      const t = loadTokens()[acc.id];
-      if (!t) return;
-      setLoadingChats(true);
-      try {
-        const res = await api.chats(acc.id, t);
-        setDialogs(res.dialogs);
-      } catch {
-        /* ignore */
-      } finally {
-        setLoadingChats(false);
-      }
+      if (acc) void loadChats(acc.id);
     },
-    [accounts],
+    [accounts, loadChats],
   );
 
   const refreshAccounts = useCallback(async () => {
@@ -162,11 +178,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const backToList = useCallback(() => {
     setActiveDialog(null);
     setMessages([]);
+    setReplyToState(null);
   }, []);
 
+  const setReplyTo = useCallback((m: Message | null) => setReplyToState(m), []);
+
   const sendText = useCallback(
-    async (text: string) => {
+    async (text: string, replyToMsg?: Message | null) => {
       if (!current || !token || !activeDialog) return;
+      const rep = replyToMsg ?? replyTo;
       const optimistic: Message = {
         id: -Date.now(),
         tg_id: -Date.now(),
@@ -177,13 +197,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         media_url: null,
         media_size: null,
         date: new Date().toISOString(),
-        reply_to: null,
+        reply_to: rep ? rep.tg_id : null,
         read: false,
         hidden: false,
       };
       setMessages((prev) => [...prev, optimistic]);
+      setReplyToState(null);
       try {
-        const sent = await api.send(current.id, activeDialog.id, text, token);
+        const sent = await api.send(current.id, activeDialog.id, text, token, {
+          replyTo: rep ? rep.tg_id : undefined,
+        });
         setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? sent : m)));
         setDialogs((prev) =>
           prev.map((d) =>
@@ -197,7 +220,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         console.error(e);
       }
     },
-    [current, token, activeDialog],
+    [current, token, activeDialog, replyTo],
   );
 
   const loadMore = useCallback(async () => {
@@ -252,6 +275,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       messages,
       loadingChats,
       loadingMessages,
+      chatsError,
+      replyTo,
+      setReplyTo,
       token,
       settingsOpen,
       lotusOpen,
@@ -276,6 +302,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       messages,
       loadingChats,
       loadingMessages,
+      chatsError,
+      replyTo,
+      setReplyTo,
       token,
       settingsOpen,
       lotusOpen,

@@ -192,6 +192,14 @@ export const IconLogout = (p: IconProps) =>
     </>
   ));
 
+export const IconReply = (p: IconProps) =>
+  base(p, (
+    <>
+      <path d="M9 17l-5-5 5-5" />
+      <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+    </>
+  ));
+
 export const IconSpinner = (p: IconProps) => (
   <svg width={p.size ?? 20} height={p.size ?? 20} viewBox="0 0 24 24" fill="none" className={p.className} aria-hidden="true">
     <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />

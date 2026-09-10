@@ -12,7 +12,7 @@ function formatTime(iso: string | null): string {
 }
 
 export function ChatList() {
-  const { accounts, current, dialogs, loadingChats, selectAccount, openDialog, openSettings } = useStore();
+  const { accounts, current, dialogs, loadingChats, chatsError, selectAccount, openDialog, openSettings } = useStore();
   const [search, setSearch] = useState("");
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
@@ -66,7 +66,15 @@ export function ChatList() {
             <IconSpinner size={22} />
           </div>
         )}
-        {!loadingChats && filtered.length === 0 && (
+        {!loadingChats && chatsError && (
+          <div className="list-status error">
+            {chatsError}
+            <button className="btn ghost" onClick={() => current && void selectAccount(current.id)}>
+              Qayta urinish
+            </button>
+          </div>
+        )}
+        {!loadingChats && !chatsError && filtered.length === 0 && (
           <div className="list-status muted">Chatlar hozircha yo'q</div>
         )}
         {filtered.map((d) => (

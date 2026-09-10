@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api } from "../api";
-import { IconCheck, IconCheckDouble, IconDownload, IconEdit, IconStar, IconTrash, IconX } from "../icons";
+import { IconCheck, IconCheckDouble, IconDownload, IconEdit, IconReply, IconStar, IconTrash, IconX } from "../icons";
 import { useStore } from "../store";
 import type { Message } from "../types";
 
@@ -50,7 +50,7 @@ function MediaContent({ msg }: { msg: Message }) {
 const REACTIONS = ["👍", "❤️", "🔥", "😮", "😢", "🎉"];
 
 export function MessageBubble({ msg }: { msg: Message }) {
-  const { current, token, activeDialog, appUser } = useStore();
+  const { current, token, activeDialog, appUser, setReplyTo } = useStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState("");
@@ -76,6 +76,7 @@ export function MessageBubble({ msg }: { msg: Message }) {
   return (
     <div className={`bubble-row ${msg.out ? "out" : "in"}`}>
       <div className={`bubble ${msg.out ? "out" : "in"} ${hasMedia ? "has-media" : ""}`}>
+        {msg.reply_to && <div className="reply-ref">javob qilingan xabar</div>}
         {hasMedia && (
           <div className="media-box">
             <MediaContent msg={msg} />
@@ -97,47 +98,52 @@ export function MessageBubble({ msg }: { msg: Message }) {
         </div>
       </div>
 
-      {isVip && !editing && (
-        <div className="msg-actions">
-          <button className="mini-btn" title="Harakatlar" onClick={() => setMenuOpen((v) => !v)}>
-            <IconStar size={14} />
-          </button>
-          {menuOpen && (
-            <div className="msg-menu">
-              {msg.out && (
-                <button onClick={() => { setEditing(true); setEditText(msg.text); setMenuOpen(false); }}>
-                  <IconEdit size={15} /> Tahrirlash
+      <div className="msg-actions">
+        <button className="mini-btn" title="Javob berish" onClick={() => setReplyTo(msg)}>
+          <IconReply size={15} />
+        </button>
+        {isVip && !editing && (
+          <>
+            <button className="mini-btn" title="Harakatlar" onClick={() => setMenuOpen((v) => !v)}>
+              <IconStar size={14} />
+            </button>
+            {menuOpen && (
+              <div className="msg-menu">
+                {msg.out && (
+                  <button onClick={() => { setEditing(true); setEditText(msg.text); setMenuOpen(false); }}>
+                    <IconEdit size={15} /> Tahrirlash
+                  </button>
+                )}
+                {msg.out && (
+                  <button onClick={() => act(() => api.vipDelete(current!.id, activeDialog!.id, msg.tg_id, token!))}>
+                    <IconTrash size={15} /> O'chirish
+                  </button>
+                )}
+                <button onClick={() => { setReacting((v) => !v); setMenuOpen(false); }}>
+                  <IconStar size={15} /> Reaksiya
                 </button>
-              )}
-              {msg.out && (
-                <button onClick={() => act(() => api.vipDelete(current!.id, activeDialog!.id, msg.tg_id, token!))}>
-                  <IconTrash size={15} /> O'chirish
+                <button
+                  onClick={() =>
+                    act(() => api.vipStar(current!.id, { dialog_id: activeDialog!.id, tg_id: msg.tg_id, text: msg.text, dialog_title: activeDialog!.title }, token!))
+                  }
+                >
+                  <IconStar size={15} /> Yulduzcha
                 </button>
-              )}
-              <button onClick={() => { setReacting((v) => !v); setMenuOpen(false); }}>
-                <IconStar size={15} /> Reaksiya
-              </button>
-              <button
-                onClick={() =>
-                  act(() => api.vipStar(current!.id, { dialog_id: activeDialog!.id, tg_id: msg.tg_id, text: msg.text, dialog_title: activeDialog!.title }, token!))
-                }
-              >
-                <IconStar size={15} /> Yulduzcha
-              </button>
-            </div>
-          )}
-          {reacting && (
-            <div className="reaction-bar">
-              {REACTIONS.map((r) => (
-                <button key={r} onClick={() => { void act(() => api.vipReact(current!.id, activeDialog!.id, msg.tg_id, r, token!)); setReacting(false); }}>
-                  {r}
-                </button>
-              ))}
-              <button onClick={() => setReacting(false)}><IconX size={14} /></button>
-            </div>
-          )}
-        </div>
-      )}
+              </div>
+            )}
+            {reacting && (
+              <div className="reaction-bar">
+                {REACTIONS.map((r) => (
+                  <button key={r} onClick={() => { void act(() => api.vipReact(current!.id, activeDialog!.id, msg.tg_id, r, token!)); setReacting(false); }}>
+                    {r}
+                  </button>
+                ))}
+                <button onClick={() => setReacting(false)}><IconX size={14} /></button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

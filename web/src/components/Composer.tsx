@@ -1,10 +1,10 @@
 import { useRef, useState } from "react";
 import { api } from "../api";
-import { IconMic, IconPlus, IconSend, IconSpinner, IconStory } from "../icons";
+import { IconMic, IconPlus, IconSend, IconSpinner, IconStory, IconX } from "../icons";
 import { useStore } from "../store";
 
 export function Composer() {
-  const { current, token, activeDialog, sendText, dialogs } = useStore();
+  const { current, token, activeDialog, sendText, dialogs, replyTo, setReplyTo } = useStore();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -129,6 +129,17 @@ export function Composer() {
 
   return (
     <footer className="composer">
+      {replyTo && (
+        <div className="reply-context">
+          <div className="reply-context-text">
+            <b>Javob:</b> {replyTo.text || "media"}
+          </div>
+          <button className="icon-btn" onClick={() => setReplyTo(null)} title="Bekor">
+            <IconX size={16} />
+          </button>
+        </div>
+      )}
+      <div className="composer-row">
       <input
         ref={fileRef}
         type="file"
@@ -193,6 +204,7 @@ export function Composer() {
       >
         <span style={{ transform: "scaleX(-1)", display: "inline-flex" }}><IconSend size={18} /></span>
       </button>
+      </div>
 
       {forwardMode && (
         <div className="forward-pop">

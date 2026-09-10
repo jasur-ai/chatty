@@ -68,15 +68,35 @@ export function applyTelegramColorScheme() {
   }
 }
 
-/** Mini app ishga tushirilganda chaqiriladi. */
+/** Mini app ishga tushirilganda chaqiriladi — to'liq ekran + theme. */
 export function initTelegram() {
   const wa = getWebApp();
   if (!wa) return;
   try {
     wa.ready?.();
-    wa.expand?.();
     applyTelegramColorScheme();
   } catch {
     /* ignore */
+  }
+  // expand() ba'zan SDK hali tayyor bo'lmaganda ishlamaydi — retry qilamiz
+  let tries = 0;
+  const doExpand = () => {
+    tries++;
+    try {
+      wa.expand?.();
+      // Mini app to'liq ekranga chiqishi uchun viewport'ni sozlaymiz
+      document.documentElement.style.height = "100%";
+      document.body.style.height = "100%";
+    } catch {
+      /* ignore */
+    }
+    if (tries < 5 && !wa.isExpanded) {
+      setTimeout(doExpand, 300);
+    }
+  };
+  doExpand();
+  // Telegram rang sxemasi o'zgarsa ham qo'llash
+  if (wa.colorScheme) {
+    document.documentElement.setAttribute("data-color-scheme", wa.colorScheme);
   }
 }
