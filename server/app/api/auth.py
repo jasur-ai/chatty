@@ -1,9 +1,16 @@
-"""Login API: start (kod yuborish), verify (kod), password (2FA)."""
+"""Login API: start (kod yuborish), verify (kod), password (2FA), silent (Telegram)."""
+import hashlib
+import hmac
+import json as _json
+from urllib.parse import parse_qs
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
+from ..config import settings
 from ..db import Account, AppUser, SessionLocal
+from ..security import create_token
 from ..tg.auth import start_login, submit_password, verify_code
 from ..tg.sync import serialize_account
 
@@ -24,6 +31,73 @@ class CodeIn(BaseModel):
 class PasswordIn(BaseModel):
     phone: str
     password: str
+
+
+class SilentIn(BaseModel):
+    init_data: str | None = None
+    tg_user_id: int | None = None
+
+
+def verify_telegram_init_data(init_data: str) -> dict | None:
+    """Telegram Mini App initData'ni HMAC orqali tekshiradi va user'ni qaytaradi."""
+    if not init_data or not settings.tg_bot_token:
+        return None
+    try:
+        params = {k: v[0] for k, v in parse_qs(init_data).items()}
+        received_hash = params.pop("hash", None)
+        if not received_hash:
+            return None
+        data_check_string = "\n".join(f"{k}={params[k]}" for k in sorted(params))
+        secret_key = hmac.new(b"WebAppData", settings.tg_bot_token.encode(), hashlib.sha256).digest()
+        calc_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(calc_hash, received_hash):
+            return None
+        return _json.loads(params.get("user", "{}"))
+    except Exception:
+        return None
+
+
+def _serialize_app_user(u: AppUser) -> dict:
+    return {
+        "is_owner": u.is_owner,
+        "is_admin": u.is_admin,
+        "is_vip": u.is_vip,
+        "theme": u.theme,
+    }
+
+
+@router.post("/silent")
+async def silent_auth(body: SilentIn):
+    """Telegram Mini App ichida avtomatik kirish — telefon/kod/2FA talab qilmaydi.
+
+    Telegram initData (HMAC) tekshiriladi, keyin o'sha Telegram foydalanuvchisiga
+    bog'langan tayyor akkaunt topilib, yangi token qaytariladi.
+    """
+    user = None
+    if body.init_data:
+        user = verify_telegram_init_data(body.init_data)
+    tg_user_id = (user or {}).get("id") if user else body.tg_user_id
+    if not tg_user_id:
+        raise HTTPException(status_code=400, detail="Telegram foydalanuvchisi aniqlanmadi")
+
+    async with SessionLocal() as db:
+        app_user = (
+            await db.execute(select(AppUser).where(AppUser.tg_user_id == int(tg_user_id)))
+        ).scalar_one_or_none()
+        if app_user is None:
+            raise HTTPException(status_code=404, detail="Akkaunt topilmadi — avval ulang")
+        acc = (
+            await db.execute(select(Account).where(Account.id == app_user.account_id))
+        ).scalar_one_or_none()
+        if acc is None or acc.auth_step != "ready":
+            raise HTTPException(status_code=401, detail="Akkaunt ulangan emas")
+
+        token = create_token(acc.id)
+        return {
+            "token": token,
+            "account": serialize_account(acc),
+            "app_user": _serialize_app_user(app_user),
+        }
 
 
 @router.post("/start")

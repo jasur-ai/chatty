@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { IconBack } from "../icons";
+import { IconBack, IconSpinner } from "../icons";
 import { useStore } from "../store";
 import type { Message } from "../types";
 import { Avatar } from "./Avatar";
@@ -71,7 +71,10 @@ export function ChatView() {
         }}
       >
         {loadingMessages && (
-          <div className="messages-loading">Yuklanmoqda...</div>
+          <div className="messages-loading">
+            <IconSpinner size={18} />
+            <span>Yuklanmoqda…</span>
+          </div>
         )}
         {messages.map((m, i) => {
           const prev = messages[i - 1];

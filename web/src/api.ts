@@ -88,6 +88,12 @@ export const api = {
       body: JSON.stringify({ phone, password }),
     }),
 
+  silentAuth: (initData: string | null, tgUserId: number | null) =>
+    req<LoginResult>("/api/auth/silent", {
+      method: "POST",
+      body: JSON.stringify({ init_data: initData, tg_user_id: tgUserId }),
+    }),
+
   accounts: () => req<{ accounts: Account[] }>("/api/auth/accounts"),
 
   logout: (accountId: number) =>

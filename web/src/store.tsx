@@ -10,6 +10,7 @@ import {
 } from "react";
 import { api, dropToken, loadTokens, saveToken } from "./api";
 import type { Account, AppUserInfo, Dialog, Message, WsEvent } from "./types";
+import { getTgUser, getWebApp } from "./telegram";
 import { ChattySocket } from "./ws";
 
 interface Store {
@@ -39,6 +40,7 @@ interface Store {
   loadMore: () => Promise<void>;
   addAccount: (account: Account, token: string, appUser: AppUserInfo) => void;
   refreshAccounts: () => Promise<void>;
+  silentLogin: () => Promise<boolean>;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -266,6 +268,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const openLotus = useCallback(() => setLotusOpen(true), []);
   const closeLotus = useCallback(() => setLotusOpen(false), []);
 
+  const silentLogin = useCallback(async (): Promise<boolean> => {
+    // Telegram Mini App ichida — initData orqali avtomatik kirish (telefon/kod/2FA shart emas).
+    const initData = getWebApp()?.initData ?? null;
+    const tgUser = getTgUser();
+    if (!initData && !tgUser) return false;
+    try {
+      const res = await api.silentAuth(initData, tgUser?.id ?? null);
+      addAccount(res.account, res.token, res.app_user);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [addAccount]);
+
   const logout = useCallback(async () => {
     if (!current || !token) return;
     try {
@@ -305,6 +321,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       openLotus,
       closeLotus,
       logout,
+      silentLogin,
       selectAccount,
       openDialog,
       backToList,
@@ -333,6 +350,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       openLotus,
       closeLotus,
       logout,
+      silentLogin,
       selectAccount,
       openDialog,
       backToList,

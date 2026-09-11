@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { IconLogout, IconMenu, IconPlus, IconSearch, IconSettings, IconSpinner } from "../icons";
+import { IconLogout, IconMenu, IconPlus, IconSearch, IconSettings } from "../icons";
 import { useStore } from "../store";
 import { Avatar } from "./Avatar";
 
@@ -62,8 +62,16 @@ export function ChatList() {
 
       <div className="chat-list">
         {loadingChats && (
-          <div className="list-status">
-            <IconSpinner size={22} />
+          <div className="skeleton-list">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div className="skeleton" key={i}>
+                <div className="skeleton-avatar" />
+                <div className="skeleton-body">
+                  <div className="skeleton-line" />
+                  <div className="skeleton-line-sm" />
+                </div>
+              </div>
+            ))}
           </div>
         )}
         {!loadingChats && chatsError && (
