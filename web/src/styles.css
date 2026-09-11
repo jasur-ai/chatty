@@ -698,51 +698,88 @@ textarea {
 }
 
 .settings {
-  width: min(720px, 100%);
-  max-height: 92vh;
+  width: min(860px, 100%);
+  height: min(640px, 92vh);
   background: var(--sidebar-bg);
-  border-radius: 14px;
+  border-radius: 16px;
+  display: flex;
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+}
+
+/* Chap yon panel — navigatsiya */
+.settings-nav {
+  width: 230px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
+  padding: 16px 12px;
+  gap: 2px;
+  border-right: 1px solid var(--divider);
+  overflow-y: auto;
+  background: var(--input-bg);
 }
 
-.settings-header {
+.settings-nav-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
+  gap: 12px;
+  padding: 4px 8px 16px;
+  margin-bottom: 6px;
   border-bottom: 1px solid var(--divider);
 }
 
-.settings-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.settings-nav-user {
+  min-width: 0;
+}
+
+.settings-nav-name {
   font-weight: 600;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.settings-nav {
-  display: flex;
-  gap: 4px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--divider);
-  overflow-x: auto;
+.settings-nav-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.nav-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  padding: 14px 12px 6px;
 }
 
 .nav-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 999px;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
   border: none;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--text);
   cursor: pointer;
   font-size: 14px;
-  white-space: nowrap;
+  text-align: left;
+  width: 100%;
+  transition: background 0.12s;
+}
+
+.nav-btn:hover {
+  background: var(--hover);
+}
+
+.nav-btn-icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-secondary);
 }
 
 .nav-btn.active {
@@ -751,10 +788,75 @@ textarea {
   font-weight: 600;
 }
 
+.nav-btn.active .nav-btn-icon {
+  color: var(--accent);
+}
+
+/* O'ng tomondagi kontent */
+.settings-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--divider);
+  flex-shrink: 0;
+}
+
+.settings-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 18px;
+}
+
 .settings-body {
   padding: 20px;
   overflow-y: auto;
   flex: 1;
+}
+
+/* Mobil: yon panel tepada gorizontal qatorga aylanadi (to'liq ekran) */
+@media (max-width: 620px) {
+  .overlay {
+    padding: 0;
+  }
+  .settings {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+    flex-direction: column;
+  }
+  .settings-nav {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    padding: 8px;
+    border-right: none;
+    border-bottom: 1px solid var(--divider);
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .settings-nav-head,
+  .nav-group-label {
+    display: none;
+  }
+  .nav-btn {
+    width: auto;
+    white-space: nowrap;
+    padding: 8px 14px;
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
 }
 
 .settings-pane {
@@ -777,10 +879,8 @@ textarea {
 .pane-sub {
   font-weight: 600;
   margin-top: 8px;
-  color: var(--text-secondary);
+  color: var(--accent);
   font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
 }
 
 .pane-row {

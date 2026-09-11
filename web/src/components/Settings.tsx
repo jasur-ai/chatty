@@ -7,7 +7,6 @@ import {
   IconMic,
   IconMusic,
   IconSend,
-  IconSettings,
   IconStar,
   IconStory,
   IconTrash,
@@ -42,48 +41,79 @@ export function Settings() {
   return (
     <div className="overlay">
       <div className="settings">
-        <header className="settings-header">
-          <div className="settings-title">
-            <IconSettings size={20} />
-            <span>Sozlamalar</span>
+        <div className="settings-nav">
+          <div className="settings-nav-head">
+            <Avatar name={current.bot_name || current.first_name || current.phone} photo={current.bot_photo} size={40} />
+            <div className="settings-nav-user">
+              <div className="settings-nav-name">{current.bot_name || current.first_name || "Chatty"}</div>
+              <div className="settings-nav-sub">
+                {appUser?.is_owner ? "Owner" : appUser?.is_admin ? "Admin" : appUser?.is_vip ? "VIP" : "Foydalanuvchi"}
+              </div>
+            </div>
           </div>
-          <button className="icon-btn" onClick={closeSettings} title="Yopish">
-            <IconX size={22} />
-          </button>
-        </header>
 
-        <nav className="settings-nav">
-          <NavBtn id="bot" icon={<IconBot size={18} />} label="Bot" active={tab === "bot"} onClick={() => setTab("bot")} />
-          <NavBtn id="auto" icon={<IconSend size={18} />} label="Avto-javob" active={tab === "auto"} onClick={() => setTab("auto")} />
-          <NavBtn id="pro" icon={<IconStar size={18} />} label="Pro" active={tab === "pro"} onClick={() => setTab("pro")} />
-          <NavBtn id="lotus" icon={<IconStar size={18} />} label="Lotus" active={tab === "lotus"} onClick={() => setTab("lotus")} />
-          <NavBtn id="music" icon={<IconMusic size={18} />} label="Musiqa" active={tab === "music"} onClick={() => setTab("music")} />
+          <div className="nav-group-label">Bot persona</div>
+          <NavBtn icon={<IconBot size={20} />} label="Bot" active={tab === "bot"} onClick={() => setTab("bot")} />
+          <NavBtn icon={<IconSend size={20} />} label="Avto-javob" active={tab === "auto"} onClick={() => setTab("auto")} />
+
+          <div className="nav-group-label">Asboblar</div>
+          <NavBtn icon={<IconStar size={20} />} label="Pro" active={tab === "pro"} onClick={() => setTab("pro")} />
+          <NavBtn icon={<IconMusic size={20} />} label="Musiqa" active={tab === "music"} onClick={() => setTab("music")} />
+          <NavBtn icon={<IconStar size={20} />} label="Lotus AI" active={tab === "lotus"} onClick={() => setTab("lotus")} />
+
           {isVip && (
-            <NavBtn id="vip" icon={<IconCrown size={18} />} label="VIP" active={tab === "vip"} onClick={() => setTab("vip")} />
+            <>
+              <div className="nav-group-label">VIP</div>
+              <NavBtn icon={<IconCrown size={20} />} label="VIP funksiyalar" active={tab === "vip"} onClick={() => setTab("vip")} />
+            </>
           )}
           {isAdmin && (
-            <NavBtn id="admin" icon={<IconCrown size={18} />} label="Admin" active={tab === "admin"} onClick={() => setTab("admin")} />
+            <>
+              <div className="nav-group-label">Boshqaruv</div>
+              <NavBtn icon={<IconCrown size={20} />} label="Admin panel" active={tab === "admin"} onClick={() => setTab("admin")} />
+            </>
           )}
-        </nav>
+        </div>
 
-        <div className="settings-body">
-          {tab === "bot" && <BotTab />}
-          {tab === "auto" && <AutoTab />}
-          {tab === "pro" && <ProTab />}
-          {tab === "lotus" && <LotusTab />}
-          {tab === "music" && <MusicTab />}
-          {tab === "vip" && isVip && <VipTab />}
-          {tab === "admin" && isAdmin && <AdminTab />}
+        <div className="settings-main">
+          <header className="settings-header">
+            <div className="settings-title">
+              <span>{TAB_TITLES[tab]}</span>
+            </div>
+            <button className="icon-btn" onClick={closeSettings} title="Yopish">
+              <IconX size={22} />
+            </button>
+          </header>
+
+          <div className="settings-body">
+            {tab === "bot" && <BotTab />}
+            {tab === "auto" && <AutoTab />}
+            {tab === "pro" && <ProTab />}
+            {tab === "lotus" && <LotusTab />}
+            {tab === "music" && <MusicTab />}
+            {tab === "vip" && isVip && <VipTab />}
+            {tab === "admin" && isAdmin && <AdminTab />}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function NavBtn({ icon, label, active, onClick }: { id?: string; icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
+const TAB_TITLES: Record<Tab, string> = {
+  bot: "Bot persona",
+  auto: "Avto-javob",
+  pro: "Pro funksiyalar",
+  lotus: "Lotus AI",
+  music: "Musiqa",
+  vip: "VIP funksiyalar",
+  admin: "Admin panel",
+};
+
+function NavBtn({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
   return (
     <button className={`nav-btn ${active ? "active" : ""}`} onClick={onClick}>
-      {icon}
+      <span className="nav-btn-icon">{icon}</span>
       <span>{label}</span>
     </button>
   );
