@@ -94,7 +94,24 @@ class BotNotifier:
         if not self.enabled or self._task is not None:
             return
         self._task = asyncio.create_task(self._poll_loop())
+        asyncio.create_task(self._setup_commands())
         log.info("Bot polling boshlandi (@chattiey_bot)")
+
+    async def _setup_commands(self) -> None:
+        """Bot menyusiga komandalarni qo'shadi (Telegram'da '/' bosilganda ko'rinadi)."""
+        commands = [
+            {"command": "start", "description": "Botni ishga tushirish"},
+            {"command": "open", "description": "Chatty ilovasini ochish"},
+            {"command": "help", "description": "Yordam va qo'llanma"},
+            {"command": "status", "description": "Ulanish holatini ko'rish"},
+        ]
+        try:
+            async with httpx.AsyncClient() as c:
+                await c.post(
+                    f"{self.base}/setMyCommands", json={"commands": commands}, timeout=10
+                )
+        except Exception as e:  # noqa: BLE001
+            log.warning("Bot komandalari o'rnatilmadi: %s", e)
 
     async def stop(self) -> None:
         if self._task:
@@ -135,13 +152,48 @@ class BotNotifier:
         elif "message" in upd:
             msg = upd["message"]
             chat_id = msg["chat"]["id"]
-            if msg.get("text") == "/start":
+            text = (msg.get("text") or "").strip()
+            cmd = text.split()[0].split("@")[0] if text.startswith("/") else text
+            if cmd == "/start":
+                await self._send_open_button(
+                    chat_id,
+                    "Chatty xabarnoma botiga xush kelibsiz.\n"
+                    "Sizga kelgan xabarlar haqida shu yerda xabar beramiz.\n\n"
+                    "Ilovani ochib, akkauntlaringizni boshqaring.",
+                )
+            elif cmd == "/open":
+                await self._send_open_button(chat_id, "Chatty ilovasini ochish uchun tugmani bosing.")
+            elif cmd == "/help":
                 await self.send_notification(
                     chat_id,
-                    "Chatty xabarnoma boti.\n"
-                    "Sizga kelgan xabarlar haqida shu yerda xabar beramiz. "
-                    "Javob yozish uchun Chatty ilovasini oching.",
+                    "Chatty — Telegram akkauntlarini boshqarish platformasi.\n\n"
+                    "Qanday ishlaydi:\n"
+                    "1. Chatty ilovasida akkauntni ulaysiz (telefon + kod + 2FA)\n"
+                    "2. Sizga xabar kelganda shu bot xabar beradi\n"
+                    "3. \"Javob yozish\" tugmasi bilan ilovani ochasiz\n\n"
+                    "Komandalar:\n"
+                    "/start — boshlash\n"
+                    "/open — ilovani ochish\n"
+                    "/help — yordam\n"
+                    "/status — ulanish holati",
                 )
+            elif cmd == "/status":
+                from .tg.manager import manager  # noqa: PLC0415
+
+                n = len(manager.clients)
+                await self.send_notification(
+                    chat_id,
+                    f"Ulangan akkauntlar: {n} ta.\n"
+                    "Ulanish holatini to'liq ko'rish uchun ilovani oching.",
+                )
+
+    async def _send_open_button(self, chat_id: int, text: str) -> None:
+        await self.send_notification(
+            chat_id,
+            text,
+            button_url=settings.bot_reply_url or None,
+            button_text="Chatty ochish",
+        )
 
     async def _answer_callback(self, cq: dict) -> None:
         qid = cq["id"]

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { resolveUrl } from "../env";
 import { IconBack, IconSpinner } from "../icons";
 import { useStore } from "../store";
 import type { Message } from "../types";
@@ -52,7 +53,7 @@ export function ChatView() {
         <button className="icon-btn mobile-back" onClick={backToList}>
           <IconBack size={22} />
         </button>
-        <Avatar name={title} size={40} />
+        <Avatar name={title} photo={resolveUrl(activeDialog.photo)} size={40} />
         <div className="chat-header-info">
           <div className="chat-header-title">{title}</div>
           <div className="chat-header-status muted">

@@ -27,6 +27,7 @@ import type {
   StarredMsg,
 } from "../types";
 import { Avatar } from "./Avatar";
+import { resolveUrl } from "../env";
 
 type Tab = "bot" | "auto" | "pro" | "lotus" | "music" | "vip" | "admin";
 
@@ -43,7 +44,7 @@ export function Settings() {
       <div className="settings">
         <div className="settings-nav">
           <div className="settings-nav-head">
-            <Avatar name={current.bot_name || current.first_name || current.phone} photo={current.bot_photo} size={40} />
+            <Avatar name={current.bot_name || current.first_name || current.phone} photo={resolveUrl(current.bot_photo)} size={40} />
             <div className="settings-nav-user">
               <div className="settings-nav-name">{current.bot_name || current.first_name || "Chatty"}</div>
               <div className="settings-nav-sub">

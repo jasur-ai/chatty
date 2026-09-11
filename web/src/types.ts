@@ -50,7 +50,8 @@ export interface Message {
 
 export type WsEvent =
   | { type: "message"; dialog: Dialog; message: Message }
-  | { type: "read_outbox"; dialog_id: number; max_tg_id: number };
+  | { type: "read_outbox"; dialog_id: number; max_tg_id: number }
+  | { type: "message_media"; dialog_id: number; tg_id: number; media_type: string; media_url: string };
 
 export interface LoginResult {
   token: string;

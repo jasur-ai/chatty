@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../api";
+import { resolveUrl } from "../env";
 import { IconCheck, IconCheckDouble, IconDownload, IconEdit, IconReply, IconStar, IconTrash, IconX } from "../icons";
 import { useStore } from "../store";
 import type { Message } from "../types";
@@ -10,7 +11,7 @@ function fmtTime(iso: string | null): string {
 }
 
 function MediaContent({ msg }: { msg: Message }) {
-  const url = msg.media_url;
+  const url = resolveUrl(msg.media_url);
   if (!url) {
     return <div className="media-placeholder"><span>Media</span></div>;
   }

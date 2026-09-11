@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { IconMic, IconPlus, IconSend, IconSpinner, IconStory, IconX } from "../icons";
 import { useStore } from "../store";
@@ -10,12 +10,34 @@ export function Composer() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [recording, setRecording] = useState<"voice" | "round" | null>(null);
+  const [recSeconds, setRecSeconds] = useState(0);
   const [forwardMode, setForwardMode] = useState(false);
   const [forwardTargets, setForwardTargets] = useState<number[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const recStartRef = useRef(0);
+
+  // Yozish vaqti hisoblagichi
+  useEffect(() => {
+    if (!recording) {
+      setRecSeconds(0);
+      return;
+    }
+    recStartRef.current = Date.now();
+    setRecSeconds(0);
+    const t = setInterval(() => {
+      setRecSeconds(Math.floor((Date.now() - recStartRef.current) / 1000));
+    }, 500);
+    return () => clearInterval(t);
+  }, [recording]);
+
+  function fmtRec(s: number): string {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  }
 
   async function doSend() {
     const t = text.trim();
@@ -137,6 +159,15 @@ export function Composer() {
           <button className="icon-btn" onClick={() => setReplyTo(null)} title="Bekor">
             <IconX size={16} />
           </button>
+        </div>
+      )}
+      {recording && (
+        <div className="rec-banner">
+          <span className="rec-dot" />
+          <span>
+            {recording === "voice" ? "Ovozli xabar" : "Dumaloq video"} yozilmoqda — {fmtRec(recSeconds)}
+          </span>
+          <button className="btn danger" onClick={stopRecording}>To'xtatish va yuborish</button>
         </div>
       )}
       <div className="composer-row">

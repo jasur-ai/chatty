@@ -1,5 +1,6 @@
 """Telegram entity'larini lokal DB'ga sinxronlash + serializatsiya."""
 import io
+import time
 from datetime import datetime
 
 from sqlalchemy import select
@@ -83,10 +84,16 @@ def _mime_ext_of(msg) -> tuple[str, str]:
     return "application/octet-stream", ".bin"
 
 
-async def _process_media(client, msg) -> tuple[str, str | None]:
-    """Media'ni yuklab olib R2'ga qo'yadi. (key, media_type) qaytaradi."""
+async def _process_media(client, msg, deadline: float | None = None) -> tuple[str, str | None]:
+    """Media'ni yuklab olib saqlaydi. (media_type, key) qaytaradi.
+
+    deadline berilsa va o'tib ketgan bo'lsa — yuklashni o'tkazib yuboramiz
+    (xabar tez qaytishi uchun; media keyin fonda yuklanadi).
+    """
     if not msg.media:
         return "none", None
+    if deadline is not None and time.monotonic() > deadline:
+        return media_type_of(msg), None
     try:
         data = await client.download_media(msg, file=io.BytesIO())
         if data is None:
@@ -170,7 +177,9 @@ async def download_dialog_photo(client, entity, db, dialog: Dialog) -> None:
         return
 
 
-async def upsert_message(db, client, account_id: int, dialog: Dialog, msg, *, hidden: bool = False) -> Message:
+async def upsert_message(
+    db, client, account_id: int, dialog: Dialog, msg, *, hidden: bool = False, media_deadline: float | None = None
+) -> Message:
     tg_id = msg.id
     row = (
         await db.execute(
@@ -184,10 +193,9 @@ async def upsert_message(db, client, account_id: int, dialog: Dialog, msg, *, hi
 
     text = msg.message or ""
     media_type, media_key = ("none", None)
-    if msg.media and not row:
-        media_type, media_key = await _process_media(client, msg)
-    elif msg.media and row and row.media_type == "none":
-        media_type, media_key = await _process_media(client, msg)
+    # yangi xabar yoki media hali yuklanmagan (media_key yo'q) bo'lsa — yuklab olamiz
+    if msg.media and (not row or (row and (row.media_type == "none" or row.media_key is None))):
+        media_type, media_key = await _process_media(client, msg, deadline=media_deadline)
 
     if row is None:
         row = Message(

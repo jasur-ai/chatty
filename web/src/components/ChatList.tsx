@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { resolveUrl } from "../env";
 import { IconLogout, IconMenu, IconPlus, IconSearch, IconSettings } from "../icons";
 import { useStore } from "../store";
 import { Avatar } from "./Avatar";
@@ -87,7 +88,7 @@ export function ChatList() {
         )}
         {filtered.map((d) => (
           <button key={d.id} className="chat-item" onClick={() => void openDialog(d)}>
-            <Avatar name={d.title} size={54} />
+            <Avatar name={d.title} photo={resolveUrl(d.photo)} size={54} />
             <div className="chat-item-body">
               <div className="chat-item-top">
                 <span className="chat-item-title">{d.title}</span>

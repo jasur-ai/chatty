@@ -17,3 +17,11 @@ export function wsUrl(token: string): string {
   const sep = WS_BASE.includes("?") ? "&" : "?";
   return `${WS_BASE}${sep}token=${tokenParam}`;
 }
+
+/** Backend qaytargan nisbiy URL'larni (masalan "/api/media/...") to'liq manzilga aylantiradi.
+ *  Frontend Cloudflare'da, media esa Render'da — aks holda rasmlar noto'g'ri hostga borib 404 bo'ladi. */
+export function resolveUrl(u: string | null | undefined): string {
+  if (!u) return "";
+  if (u.startsWith("http://") || u.startsWith("https://") || u.startsWith("data:")) return u;
+  return API_BASE + u;
+}

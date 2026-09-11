@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from ..storage import storage
 from ..ws import ws_manager
 from .manager import manager
 from .sync import (
+    _process_media,
     download_dialog_photo,
     input_peer,
     media_type_of,
@@ -111,6 +113,54 @@ async def sync_dialogs(account_id: int, limit: int = 200, force: bool = False) -
             return dialogs
 
 
+async def backfill_message_media(account_id: int, dialog_id: int) -> None:
+    """Yuklanmay qolgan media fayllarni fonda yuklab, WebSocket orqali yangilaydi."""
+    client = manager.get(account_id)
+    if client is None:
+        return
+    try:
+        async with SessionLocal() as db:
+            dialog = (
+                await db.execute(select(Dialog).where(Dialog.id == dialog_id, Dialog.account_id == account_id))
+            ).scalar_one_or_none()
+            if dialog is None:
+                return
+            entity = await client.get_entity(input_peer(dialog.tg_id, dialog.peer_type))
+            missing = (
+                await db.execute(
+                    select(Message).where(
+                        Message.account_id == account_id,
+                        Message.dialog_id == dialog_id,
+                        Message.media_key.is_(None),
+                        Message.media_type.notin_(["none", "file", "poll"]),
+                    ).limit(20)
+                )
+            ).scalars().all()
+            for row in missing:
+                try:
+                    src = await client.get_messages(entity, ids=row.tg_id)
+                    if src is None or not src.media:
+                        continue
+                    _, key = await asyncio.wait_for(_process_media(client, src), timeout=8.0)
+                    if key:
+                        row.media_key = key
+                        await db.commit()
+                        await ws_manager.broadcast(
+                            account_id,
+                            {
+                                "type": "message_media",
+                                "dialog_id": dialog_id,
+                                "tg_id": row.tg_id,
+                                "media_type": row.media_type,
+                                "media_url": storage.url(key),
+                            },
+                        )
+                except Exception:
+                    continue
+    except Exception:
+        return
+
+
 async def sync_messages(
     account_id: int, dialog_id: int, limit: int = 50, before: int | None = None
 ) -> tuple[list[dict], bool]:
@@ -130,14 +180,21 @@ async def sync_messages(
             await db.execute(select(Dialog).where(Dialog.id == dialog_id, Dialog.account_id == account_id))
         ).scalar_one()
         rows: list[Message] = []
+        # Media yuklash uchun vaqt byudjeti — matnli xabarlar darhol qaytishi uchun.
+        # Yuklanmay qolgan media fonda (backfill) yuklanadi.
+        media_deadline = time.monotonic() + 4.0
         for m in msgs:
             if m.action is not None:
                 continue
-            row = await upsert_message(db, client, account_id, dialog, m)
+            row = await upsert_message(db, client, account_id, dialog, m, media_deadline=media_deadline)
             rows.append(row)
         await db.commit()
         out = [serialize_message(r) for r in rows]
-        return out, len(msgs) >= limit
+
+    # Qolgan mediani fonda yuklash (xabarlar qaytgach, WebSocket orqali yangilanadi)
+    if any(r.media_key is None and r.media_type not in ("none", "file", "poll") for r in rows):
+        asyncio.create_task(backfill_message_media(account_id, dialog_id))
+    return out, len(msgs) >= limit
 
 
 async def send_text(

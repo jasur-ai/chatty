@@ -101,6 +101,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           m.out && m.dialog_id === ev.dialog_id && m.tg_id <= ev.max_tg_id ? { ...m, read: true } : m,
         ),
       );
+    } else if (ev.type === "message_media") {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.dialog_id === ev.dialog_id && m.tg_id === ev.tg_id
+            ? { ...m, media_type: ev.media_type, media_url: ev.media_url }
+            : m,
+        ),
+      );
     }
   }
 
