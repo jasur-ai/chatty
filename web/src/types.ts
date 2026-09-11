@@ -28,6 +28,8 @@ export interface Dialog {
   last_msg_text: string | null;
   last_msg_date: string | null;
   last_out: boolean;
+  pinned: boolean;
+  muted: boolean;
   photo: string | null;
 }
 

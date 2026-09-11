@@ -236,6 +236,8 @@ def serialize_dialog(d: Dialog) -> dict:
         "last_msg_text": d.last_msg_text,
         "last_msg_date": d.last_msg_date.isoformat() if d.last_msg_date else None,
         "last_out": d.last_out,
+        "pinned": d.pinned,
+        "muted": d.muted,
         "photo": storage.url(d.photo_key) if d.photo_key else None,
     }
 

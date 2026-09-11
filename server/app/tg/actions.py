@@ -4,7 +4,6 @@ import io
 import json
 import logging
 import tempfile
-import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -16,6 +15,7 @@ from ..storage import storage
 from ..ws import ws_manager
 from .manager import manager
 from .sync import (
+    download_dialog_photo,
     input_peer,
     media_type_of,
     serialize_dialog,
@@ -35,35 +35,79 @@ async def _require_client(account_id: int):
     return client
 
 
-async def sync_dialogs(account_id: int, limit: int = 200) -> list[dict]:
+_avatar_backfilling = False
+
+
+async def backfill_avatars(account_id: int) -> None:
+    """Avatarlarni fonda yuklaydi (javobni bloklamaydi). Kichik rasm, cheklangan son."""
+    global _avatar_backfilling
+    if _avatar_backfilling:
+        return
+    _avatar_backfilling = True
+    try:
+        client = manager.get(account_id)
+        if client is None:
+            return
+        async with SessionLocal() as db:
+            missing = (
+                await db.execute(
+                    select(Dialog)
+                    .where(
+                        Dialog.account_id == account_id,
+                        Dialog.photo_key.is_(None),
+                    )
+                    .limit(30)
+                )
+            ).scalars().all()
+            for dialog in missing:
+                try:
+                    entity = await client.get_entity(input_peer(dialog.tg_id, dialog.peer_type))
+                    await asyncio.wait_for(
+                        download_dialog_photo(client, entity, db, dialog), timeout=3.0
+                    )
+                except Exception:
+                    continue
+            await db.commit()
+    except Exception:
+        pass
+    finally:
+        _avatar_backfilling = False
+
+
+async def sync_dialogs(account_id: int, limit: int = 200, force: bool = False) -> list[dict]:
+    # 1) DB'da allaqachon dialog bor bo'lsa — darhol qaytaramiz (tez javob).
+    #    To'liq sinxronizatsiya faqat birinchi yuklanishda (DB bo'sh) yoki force bilan.
+    async with SessionLocal() as db:
+        existing = (
+            await db.execute(
+                select(Dialog)
+                .where(Dialog.account_id == account_id)
+                .order_by(Dialog.pinned.desc(), Dialog.last_msg_date.desc())
+            )
+        ).scalars().all()
+        if existing and not force:
+            dialogs = [serialize_dialog(d) for d in existing]
+            if any(not d.photo_key for d in existing):
+                asyncio.create_task(backfill_avatars(account_id))
+            return dialogs
+
+    # 2) Birinchi yuklanish yoki force — Telegram'dan to'liq sinxronizatsiya.
     client = await _require_client(account_id)
     async with manager.lock(account_id):
         async with SessionLocal() as db:
             dialogs: list[dict] = []
-            # Avatar yuklash uchun qat'iy vaqt byudjeti — chatlar ro'yxati tez qaytishi uchun.
-            # Rasmlar qolgan sinxronizatsiyalarda asta-sekin to'ldiriladi.
-            avatar_deadline = time.monotonic() + 2.5
             async for d in client.iter_dialogs(limit=limit):
                 entity = d.entity
                 dialog = await upsert_dialog(db, account_id, entity, unread_count=d.unread_count)
                 if d.pinned:
                     dialog.pinned = True
-                # Avatar rasmini yuklab olish (agar hali yo'q bo'lsa va vaqt yetarli)
-                if not dialog.photo_key and time.monotonic() < avatar_deadline:
-                    from .sync import download_dialog_photo
-
-                    try:
-                        await asyncio.wait_for(
-                            download_dialog_photo(client, entity, db, dialog), timeout=1.0
-                        )
-                    except Exception:
-                        pass
                 last = d.message
                 if last is not None:
                     await update_dialog_last(db, dialog, last, bool(last.out))
                 await db.flush()
                 dialogs.append(serialize_dialog(dialog))
             await db.commit()
+            asyncio.create_task(backfill_avatars(account_id))
             return dialogs
 
 

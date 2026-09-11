@@ -43,18 +43,28 @@ async function req<T>(path: string, init: RequestInit = {}, token?: string): Pro
     ...(init.headers as Record<string, string>),
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(API_BASE + path, { ...init, headers });
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-    } catch {
-      /* ignore */
+  // 20 soniya timeout — server javob bermasa frontend osilib qolmasin
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20000);
+  try {
+    const res = await fetch(API_BASE + path, { ...init, headers, signal: ctrl.signal });
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const body = await res.json();
+        detail = body.detail || detail;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(detail);
     }
-    throw new Error(detail);
+    return res.json() as Promise<T>;
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw new Error("Server javob bermadi (timeout)");
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json() as Promise<T>;
 }
 
 export const api = {
