@@ -1,4 +1,5 @@
 """Chatty server — FastAPI ilovasi."""
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -26,7 +27,9 @@ log = logging.getLogger("chatty")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    await manager.start_all()
+    # Telegram akkauntlarini fonda ulaymiz — server so'rovlarga darhol javob bera boshlaydi
+    # (cold start'da Telegram qayta ulanishi bir necha soniya olishi mumkin).
+    asyncio.create_task(manager.start_all())
     await notifier.start_polling()
     await scheduler.start()
     log.info("Chatty server ishga tushdi")
