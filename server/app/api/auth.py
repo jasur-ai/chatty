@@ -76,7 +76,10 @@ async def silent_auth(body: SilentIn):
     user = None
     if body.init_data:
         user = verify_telegram_init_data(body.init_data)
-    tg_user_id = (user or {}).get("id") if user else body.tg_user_id
+    if user is None:
+        # Xavfsizlik: faqat Telegram tomonidan imzolangan initData qabul qilinadi
+        raise HTTPException(status_code=401, detail="Telegram tasdiqlovi topilmadi")
+    tg_user_id = user.get("id")
     if not tg_user_id:
         raise HTTPException(status_code=400, detail="Telegram foydalanuvchisi aniqlanmadi")
 
