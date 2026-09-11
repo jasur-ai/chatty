@@ -34,7 +34,7 @@ class Account(Base):
     session_enc: Mapped[str] = mapped_column(Text, default="")  # Fernet bilan shifrlangan StringSession
     auth_step: Mapped[str] = mapped_column(String(16), default="none")  # none|code_sent|awaiting_2fa|ready
     phone_code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    last_code_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # anti-spam: oxirgi kod so'rovi
+    last_code_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # anti-spam: oxirgi kod so'rovi
     code_attempts: Mapped[int] = mapped_column(Integer, default=0)  # soatdagi urinishlar soni
     first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -42,8 +42,8 @@ class Account(Base):
     bot_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     bot_photo: Mapped[str | None] = mapped_column(String(512), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
 class Dialog(Base):
@@ -62,7 +62,7 @@ class Dialog(Base):
     unread_count: Mapped[int] = mapped_column(Integer, default=0)
     last_msg_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     last_msg_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    last_msg_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_msg_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_out: Mapped[bool] = mapped_column(Boolean, default=False)
     pinned: Mapped[bool] = mapped_column(Boolean, default=False)
     muted: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -85,7 +85,7 @@ class Message(Base):
     media_type: Mapped[str] = mapped_column(String(16), default="none")
     media_key: Mapped[str | None] = mapped_column(String(512), nullable=True)  # R2 key
     media_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    date: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    date: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     reply_to: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     read: Mapped[bool] = mapped_column(Boolean, default=False)  # outgoing: o'qilganmi; incoming: biz o'qidikmi
     # incoming uchun: filter/hide holati (so'kinish 3+ → yashirin)
@@ -111,7 +111,7 @@ class AppUser(Base):
     # Avto-javob jadvali (masalan "09:00-18:00"); bo'sh = doim
     auto_reply_from: Mapped[str | None] = mapped_column(String(5), nullable=True)
     auto_reply_to: Mapped[str | None] = mapped_column(String(5), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class ScheduledMessage(Base):
@@ -125,9 +125,9 @@ class ScheduledMessage(Base):
     text: Mapped[str] = mapped_column(Text, default="")
     media_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     media_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    send_at: Mapped[datetime] = mapped_column(DateTime)
+    send_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     sent: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class AutoDeleteRule(Base):
@@ -138,7 +138,7 @@ class AutoDeleteRule(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), unique=True)
     ttl_seconds: Mapped[int] = mapped_column(Integer, default=0)  # 0 = o'chirilgan
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class StarredMessage(Base):
@@ -153,7 +153,7 @@ class StarredMessage(Base):
     tg_id: Mapped[int] = mapped_column(BigInteger)
     text: Mapped[str] = mapped_column(Text, default="")
     dialog_title: Mapped[str] = mapped_column(String(255), default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class QuickReply(Base):
@@ -165,7 +165,7 @@ class QuickReply(Base):
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
     label: Mapped[str] = mapped_column(String(64), default="")
     text: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class AutoForwardRule(Base):
@@ -179,7 +179,7 @@ class AutoForwardRule(Base):
     source_dialog_id: Mapped[int] = mapped_column(BigInteger, default=0)  # 0 = barcha chatlar
     target_dialog_id: Mapped[int] = mapped_column(BigInteger)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class VipTheme(Base):
@@ -202,7 +202,7 @@ class AutoReplyTarget(Base):
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
     tg_user_id: Mapped[int] = mapped_column(BigInteger)
     name: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class WarnState(Base):
@@ -217,7 +217,7 @@ class WarnState(Base):
     user_tg_id: Mapped[int] = mapped_column(BigInteger)
     warns: Mapped[int] = mapped_column(Integer, default=0)
     blocked: Mapped[bool] = mapped_column(Boolean, default=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
 class MusicPost(Base):
@@ -232,7 +232,7 @@ class MusicPost(Base):
     media_key: Mapped[str | None] = mapped_column(String(512), nullable=True)  # R2 audio key
     caption: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # admin tg id
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class MusicReaction(Base):
@@ -245,7 +245,7 @@ class MusicReaction(Base):
     user_tg_id: Mapped[int] = mapped_column(BigInteger)
     reaction: Mapped[str] = mapped_column(String(16), default="like")  # like|dislike|heart|fire|clap
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class Reminder(Base):
@@ -256,9 +256,9 @@ class Reminder(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
     text: Mapped[str] = mapped_column(Text, default="")
-    due_at: Mapped[datetime] = mapped_column(DateTime)
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     done: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class AdminReport(Base):
@@ -269,7 +269,7 @@ class AdminReport(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True, nullable=True)
     body: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class Setting(Base):
@@ -289,7 +289,7 @@ class Admin(Base):
     tg_user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     role: Mapped[str] = mapped_column(String(16), default="admin")  # owner|admin
     added_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 def _migrate(conn) -> None:
