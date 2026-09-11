@@ -89,13 +89,18 @@ async def _process_media(client, msg, deadline: float | None = None) -> tuple[st
 
     deadline berilsa va o'tib ketgan bo'lsa — yuklashni o'tkazib yuboramiz
     (xabar tez qaytishi uchun; media keyin fonda yuklanadi).
+    download_media ni wait_for bilan cheklaymiz — katta fayl abadiy bloklamasin.
     """
+    import asyncio as _asyncio
+
     if not msg.media:
         return "none", None
     if deadline is not None and time.monotonic() > deadline:
         return media_type_of(msg), None
     try:
-        data = await client.download_media(msg, file=io.BytesIO())
+        data = await _asyncio.wait_for(
+            client.download_media(msg, file=io.BytesIO()), timeout=6.0
+        )
         if data is None:
             return media_type_of(msg), None
         content = data.getvalue() if isinstance(data, io.BytesIO) else bytes(data)
@@ -193,8 +198,14 @@ async def upsert_message(
 
     text = msg.message or ""
     media_type, media_key = ("none", None)
-    # yangi xabar yoki media hali yuklanmagan (media_key yo'q) bo'lsa — yuklab olamiz
-    if msg.media and (not row or (row and (row.media_type == "none" or row.media_key is None))):
+    need_download = (
+        msg.media
+        and media_deadline != 0
+        and (not row or (row and (row.media_type == "none" or row.media_key is None)))
+    )
+    if msg.media:
+        media_type = media_type_of(msg)
+    if need_download:
         media_type, media_key = await _process_media(client, msg, deadline=media_deadline)
 
     if row is None:
@@ -219,6 +230,8 @@ async def upsert_message(
         row.reply_to = msg.reply_to_msg_id
         if media_type != "none":
             row.media_type = media_type
+        # media_key faqat yangi yuklangan bo'lsa yangilanadi (eski qiymatni yo'qotmaymiz)
+        if media_key is not None:
             row.media_key = media_key
     await db.flush()
     return row
@@ -233,6 +246,9 @@ async def update_dialog_last(db, dialog: Dialog, msg, out: bool) -> None:
 
 # ---------------- serialization ----------------
 def serialize_dialog(d: Dialog) -> dict:
+    photo = None
+    if d.photo_key and storage.exists(d.photo_key):
+        photo = storage.url(d.photo_key)
     return {
         "id": d.id,
         "tg_id": d.tg_id,
@@ -246,11 +262,14 @@ def serialize_dialog(d: Dialog) -> dict:
         "last_out": d.last_out,
         "pinned": d.pinned,
         "muted": d.muted,
-        "photo": storage.url(d.photo_key) if d.photo_key else None,
+        "photo": photo,
     }
 
 
 def serialize_message(m: Message) -> dict:
+    media_url = None
+    if m.media_key and storage.exists(m.media_key):
+        media_url = storage.url(m.media_key)
     return {
         "id": m.id,
         "tg_id": m.tg_id,
@@ -258,7 +277,7 @@ def serialize_message(m: Message) -> dict:
         "out": m.out,
         "text": m.text,
         "media_type": m.media_type,
-        "media_url": storage.url(m.media_key) if m.media_key else None,
+        "media_url": media_url,
         "media_size": m.media_size,
         "date": m.date.isoformat() if m.date else None,
         "reply_to": m.reply_to,

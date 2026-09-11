@@ -1,4 +1,5 @@
 """Chatlar, xabarlar va media API."""
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -6,7 +7,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from ..db import AppUser, get_session
+from ..db import AppUser, Dialog, Message, SessionLocal, get_session
 from ..storage import storage
 from ..tg import actions
 from ..tg.sync import media_type_from_content_type
@@ -129,9 +130,58 @@ async def upload_media(
 
 @router.get("/media/{key:path}")
 async def get_media(key: str):
-    """R2'dagi faylni xizmat qilish (R2_PUBLIC_URL o'rnatilmaganda)."""
+    """Media faylni xizmat qilish. Fayl o'chib ketgan bo'lsa (Render ephemeral disk)
+    Telegram'dan qayta yuklab beradi — rasm abadiy 'yuklanmoqda' bo'lib qolmasin."""
     try:
         data, content_type = storage.get(key)
+        return Response(content=data, media_type=content_type)
+    except FileNotFoundError:
+        # fayl yo'q — mos xabarni topib qayta yuklaymiz
+        refetched = await _refetch_media(key)
+        if refetched:
+            data, content_type = refetched
+            return Response(content=data, media_type=content_type)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=404, detail="Topilmadi") from e
-    return Response(content=data, media_type=content_type)
+    raise HTTPException(status_code=404, detail="Topilmadi")
+
+
+async def _refetch_media(key: str):
+    """media_key bo'yicha xabarni topib, Telegram'dan media'ni qayta yuklaydi."""
+    from ..tg.manager import manager as _mgr
+    from ..tg.sync import _process_media
+
+    async with SessionLocal() as db:
+        row = (
+            await db.execute(select(Message).where(Message.media_key == key))
+        ).scalar_one_or_none()
+        if row is None:
+            return None
+        account_id = row.account_id
+        dialog_id = row.dialog_id
+        tg_id = row.tg_id
+        dialog = (
+            await db.execute(select(Dialog).where(Dialog.id == dialog_id))
+        ).scalar_one_or_none()
+        if dialog is None:
+            return None
+        client = _mgr.get(account_id)
+        if client is None:
+            return None
+        try:
+            from ..tg.sync import input_peer
+
+            entity = await asyncio.wait_for(
+                client.get_entity(input_peer(dialog.tg_id, dialog.peer_type)), timeout=15.0
+            )
+            src = await client.get_messages(entity, ids=tg_id)
+            if src is None or not src.media:
+                return None
+            _, new_key = await asyncio.wait_for(_process_media(client, src), timeout=15.0)
+            if not new_key:
+                return None
+            row.media_key = new_key
+            await db.commit()
+            return storage.get(new_key)
+        except Exception:
+            return None

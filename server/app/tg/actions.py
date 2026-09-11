@@ -114,7 +114,7 @@ async def sync_dialogs(account_id: int, limit: int = 200, force: bool = False) -
 
 
 async def backfill_message_media(account_id: int, dialog_id: int) -> None:
-    """Yuklanmay qolgan media fayllarni fonda yuklab, WebSocket orqali yangilaydi."""
+    """Yuklanmay qolgan (yoki o'chib ketgan) media fayllarni fonda yuklab, WebSocket orqali yangilaydi."""
     client = manager.get(account_id)
     if client is None:
         return
@@ -125,23 +125,27 @@ async def backfill_message_media(account_id: int, dialog_id: int) -> None:
             ).scalar_one_or_none()
             if dialog is None:
                 return
-            entity = await client.get_entity(input_peer(dialog.tg_id, dialog.peer_type))
-            missing = (
+            entity = await asyncio.wait_for(
+                client.get_entity(input_peer(dialog.tg_id, dialog.peer_type)), timeout=15.0
+            )
+            candidates = (
                 await db.execute(
                     select(Message).where(
                         Message.account_id == account_id,
                         Message.dialog_id == dialog_id,
-                        Message.media_key.is_(None),
                         Message.media_type.notin_(["none", "file", "poll"]),
-                    ).limit(20)
+                    ).order_by(Message.tg_id.desc()).limit(30)
                 )
             ).scalars().all()
-            for row in missing:
+            for row in candidates:
+                # media_key bor, lekin fayl o'chib ketgan bo'lsa ham qayta yuklaymiz
+                if row.media_key and storage.exists(row.media_key):
+                    continue
                 try:
                     src = await client.get_messages(entity, ids=row.tg_id)
                     if src is None or not src.media:
                         continue
-                    _, key = await asyncio.wait_for(_process_media(client, src), timeout=8.0)
+                    _, key = await asyncio.wait_for(_process_media(client, src), timeout=10.0)
                     if key:
                         row.media_key = key
                         await db.commit()
@@ -171,30 +175,39 @@ async def sync_messages(
         ).scalar_one_or_none()
         if dialog is None:
             raise ValueError("Dialog topilmadi")
-        entity = await client.get_entity(input_peer(dialog.tg_id, dialog.peer_type))
+        # Telegram chaqiruvlarini timeout bilan — server osilib qolmasin
+        entity = await asyncio.wait_for(
+            client.get_entity(input_peer(dialog.tg_id, dialog.peer_type)), timeout=15.0
+        )
 
-    msgs = [m async for m in client.iter_messages(entity, limit=limit, offset_id=before or 0)]
+    msgs = await asyncio.wait_for(
+        _collect_messages(client, entity, limit, before or 0), timeout=20.0
+    )
 
     async with SessionLocal() as db:
         dialog = (
             await db.execute(select(Dialog).where(Dialog.id == dialog_id, Dialog.account_id == account_id))
         ).scalar_one()
         rows: list[Message] = []
-        # Media yuklash uchun vaqt byudjeti — matnli xabarlar darhol qaytishi uchun.
-        # Yuklanmay qolgan media fonda (backfill) yuklanadi.
-        media_deadline = time.monotonic() + 4.0
+        # Media umuman sinxron yuklanmaydi (media_deadline=0) — xabarlar DARHOL qaytadi.
+        # Media fonda (backfill_message_media) yuklanadi va WebSocket orqali yangilanadi.
         for m in msgs:
             if m.action is not None:
                 continue
-            row = await upsert_message(db, client, account_id, dialog, m, media_deadline=media_deadline)
+            row = await upsert_message(db, client, account_id, dialog, m, media_deadline=0)
             rows.append(row)
         await db.commit()
         out = [serialize_message(r) for r in rows]
 
-    # Qolgan mediani fonda yuklash (xabarlar qaytgach, WebSocket orqali yangilanadi)
+    # Media'ni fonda yuklash (xabarlar qaytgach)
     if any(r.media_key is None and r.media_type not in ("none", "file", "poll") for r in rows):
         asyncio.create_task(backfill_message_media(account_id, dialog_id))
     return out, len(msgs) >= limit
+
+
+async def _collect_messages(client, entity, limit: int, offset_id: int) -> list:
+    """iter_messages natijasini ro'yxatga yig'adi (timeout bilan ishlatiladi)."""
+    return [m async for m in client.iter_messages(entity, limit=limit, offset_id=offset_id)]
 
 
 async def send_text(

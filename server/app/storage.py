@@ -82,6 +82,18 @@ class R2Storage:
             return f"{settings.r2_public_url.rstrip('/')}/{key}"
         return f"/api/media/{key}"
 
+    def exists(self, key: str) -> bool:
+        """Fayl hali ham saqlanayotganini tekshiradi (lokal yoki R2)."""
+        if not key:
+            return False
+        if self.client:
+            try:
+                self.client.head_object(Bucket=self.bucket, Key=key)
+                return True
+            except Exception:
+                pass
+        return (_LOCAL_DIR / key).exists()
+
     def get(self, key: str) -> tuple[bytes, str]:
         """Faylni va content-type'ini qaytaradi."""
         if self.client:
