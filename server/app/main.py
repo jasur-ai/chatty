@@ -57,8 +57,11 @@ app.include_router(lotus_api.router)
 app.include_router(vip.router)
 
 
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 async def health():
+    # HEAD qo'llab-quvvatlanadi — uptime monitorlar (UptimeRobot va boshqalar) HEAD yuboradi.
+    # Yangi FastAPI/Starlette'da @app.get() HEAD'ni avtomatik ro'yxatga olmaydi,
+    # shuning uchun ikkala metod ham aniq ko'rsatilgan.
     return {
         "ok": True,
         "accounts_online": len(manager.clients),
