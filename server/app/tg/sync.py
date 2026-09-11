@@ -266,17 +266,17 @@ def serialize_dialog(d: Dialog) -> dict:
     }
 
 
-_FETCHABLE_MEDIA = {"photo", "video", "round", "voice", "audio", "gif", "sticker"}
+_FETCHABLE_MEDIA = {"photo", "video", "round", "voice", "audio", "gif", "sticker", "file"}
 
 
 def serialize_message(m: Message) -> dict:
     media_url = None
-    if m.media_key and storage.exists(m.media_key):
-        # fayl mavjud — to'g'ridan-to'g'ri xizmat qilamiz
-        media_url = storage.url(m.media_key)
-    elif m.media_type in _FETCHABLE_MEDIA:
-        # fayl hali yuklanmagan yoki o'chib ketgan — browser so'raganda yuklanadi (on-demand)
+    if m.media_type in _FETCHABLE_MEDIA:
+        # Doim on-demand endpoint — fayl keshda bo'lsa darhol beradi,
+        # yo'qolgan (redeploy'da o'chgan) bo'lsa Telegram'dan qayta yuklab beradi.
         media_url = f"/api/media/fetch/{m.account_id}/{m.dialog_id}/{m.tg_id}"
+    elif m.media_key and storage.exists(m.media_key):
+        media_url = storage.url(m.media_key)
     return {
         "id": m.id,
         "tg_id": m.tg_id,
