@@ -37,15 +37,16 @@ export function dropToken(accountId: number) {
   localStorage.setItem(TOKEN_KEY, JSON.stringify(all));
 }
 
-async function req<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
+async function req<T>(path: string, init: RequestInit = {}, token?: string, timeoutMs = 20000): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(init.headers as Record<string, string>),
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  // 20 soniya timeout — server javob bermasa frontend osilib qolmasin
+  // Timeout — server javob bermasa frontend osilib qolmasin.
+  // Render bepul tarifi uyqudan 30-60s da uyg'onadi, shuning uchun auth so'rovlarida 90s.
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 20000);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(API_BASE + path, { ...init, headers, signal: ctrl.signal });
     if (!res.ok) {
@@ -65,6 +66,25 @@ async function req<T>(path: string, init: RequestInit = {}, token?: string): Pro
   } finally {
     clearTimeout(timer);
   }
+}
+
+// Cold-start'ga chidamli so'rov: muvaffaqiyatsiz bo'lsa qayta urinadi
+async function reqWithRetry<T>(path: string, init: RequestInit = {}, token?: string, timeoutMs = 90000): Promise<T> {
+  let lastErr: Error | null = null;
+  for (let i = 0; i < 3; i++) {
+    try {
+      return await req<T>(path, init, token, timeoutMs);
+    } catch (e) {
+      lastErr = e as Error;
+      // faqat timeout/xato (server uyg'onayotgan) bo'lsa qayta urinamiz
+      if ((e as Error).message?.includes("timeout")) {
+        await new Promise((r) => setTimeout(r, 2500));
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastErr;
 }
 
 export const api = {
@@ -89,18 +109,18 @@ export const api = {
     }),
 
   silentAuth: (initData: string | null, tgUserId: number | null) =>
-    req<LoginResult>("/api/auth/silent", {
+    reqWithRetry<LoginResult>("/api/auth/silent", {
       method: "POST",
       body: JSON.stringify({ init_data: initData, tg_user_id: tgUserId }),
     }),
 
-  accounts: () => req<{ accounts: Account[] }>("/api/auth/accounts"),
+  accounts: () => reqWithRetry<{ accounts: Account[] }>("/api/auth/accounts"),
 
   logout: (accountId: number) =>
     req<{ ok: boolean }>("/api/auth/logout", { method: "POST", body: JSON.stringify({ account_id: accountId }) }),
 
   chats: (accountId: number, token: string) =>
-    req<{ dialogs: Dialog[] }>(`/api/chats?account_id=${accountId}`, {}, token),
+    reqWithRetry<{ dialogs: Dialog[] }>(`/api/chats?account_id=${accountId}`, {}, token),
 
   messages: (accountId: number, dialogId: number, token: string, before?: number) =>
     req<{ messages: Message[]; has_more: boolean }>(
