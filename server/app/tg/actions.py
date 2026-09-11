@@ -167,6 +167,20 @@ async def backfill_message_media(account_id: int, dialog_id: int) -> None:
 async def sync_messages(
     account_id: int, dialog_id: int, limit: int = 50, before: int | None = None
 ) -> tuple[list[dict], bool]:
+    # 1) DB'da xabarlar bor bo'lsa — darhol qaytaramiz (tez, Telegram'ga murojaat yo'q).
+    async with SessionLocal() as db:
+        q = (
+            select(Message)
+            .where(Message.account_id == account_id, Message.dialog_id == dialog_id)
+        )
+        if before:
+            q = q.where(Message.tg_id < before)
+        q = q.order_by(Message.tg_id.desc()).limit(limit)
+        existing = (await db.execute(q)).scalars().all()
+        if existing:
+            return [serialize_message(m) for m in existing], len(existing) >= limit
+
+    # 2) DB bo'sh — birinchi yuklanish (Telegram'dan, timeout bilan).
     client = await _require_client(account_id)
     async with SessionLocal() as db:
         dialog = (
@@ -174,7 +188,6 @@ async def sync_messages(
         ).scalar_one_or_none()
         if dialog is None:
             raise ValueError("Dialog topilmadi")
-        # Telegram chaqiruvlarini timeout bilan — server osilib qolmasin
         entity = await asyncio.wait_for(
             client.get_entity(input_peer(dialog.tg_id, dialog.peer_type)), timeout=15.0
         )
@@ -189,7 +202,6 @@ async def sync_messages(
         ).scalar_one()
         rows: list[Message] = []
         # Media sinxron yuklanmaydi (media_deadline=0) — xabarlar DARHOL qaytadi.
-        # Media browser so'raganda /api/media/fetch orqali yuklanadi (on-demand).
         for m in msgs:
             if m.action is not None:
                 continue
