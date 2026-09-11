@@ -4,7 +4,6 @@ import io
 import json
 import logging
 import tempfile
-import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -189,8 +188,8 @@ async def sync_messages(
             await db.execute(select(Dialog).where(Dialog.id == dialog_id, Dialog.account_id == account_id))
         ).scalar_one()
         rows: list[Message] = []
-        # Media umuman sinxron yuklanmaydi (media_deadline=0) — xabarlar DARHOL qaytadi.
-        # Media fonda (backfill_message_media) yuklanadi va WebSocket orqali yangilanadi.
+        # Media sinxron yuklanmaydi (media_deadline=0) — xabarlar DARHOL qaytadi.
+        # Media browser so'raganda /api/media/fetch orqali yuklanadi (on-demand).
         for m in msgs:
             if m.action is not None:
                 continue
@@ -199,9 +198,6 @@ async def sync_messages(
         await db.commit()
         out = [serialize_message(r) for r in rows]
 
-    # Media'ni fonda yuklash (xabarlar qaytgach)
-    if any(r.media_key is None and r.media_type not in ("none", "file", "poll") for r in rows):
-        asyncio.create_task(backfill_message_media(account_id, dialog_id))
     return out, len(msgs) >= limit
 
 

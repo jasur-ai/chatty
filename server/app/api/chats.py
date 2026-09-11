@@ -128,60 +128,68 @@ async def upload_media(
     }
 
 
-@router.get("/media/{key:path}")
-async def get_media(key: str):
-    """Media faylni xizmat qilish. Fayl o'chib ketgan bo'lsa (Render ephemeral disk)
-    Telegram'dan qayta yuklab beradi — rasm abadiy 'yuklanmoqda' bo'lib qolmasin."""
-    try:
-        data, content_type = storage.get(key)
-        return Response(content=data, media_type=content_type)
-    except FileNotFoundError:
-        # fayl yo'q — mos xabarni topib qayta yuklaymiz
-        refetched = await _refetch_media(key)
-        if refetched:
-            data, content_type = refetched
-            return Response(content=data, media_type=content_type)
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=404, detail="Topilmadi") from e
-    raise HTTPException(status_code=404, detail="Topilmadi")
+@router.get("/media/fetch/{account_id}/{dialog_id}/{tg_id}")
+async def fetch_media(account_id: int, dialog_id: int, tg_id: int):
+    """Media'ni talab bo'lganda yuklab beradi (on-demand).
 
-
-async def _refetch_media(key: str):
-    """media_key bo'yicha xabarni topib, Telegram'dan media'ni qayta yuklaydi."""
+    Xabar yuklanganda media fonda emas, shu endpoint orqali yuklanadi —
+    bir xil Telethon client'ni bloklamaydi va rasm/ovoz/video darhol ko'rinadi.
+    """
     from ..tg.manager import manager as _mgr
-    from ..tg.sync import _process_media
+    from ..tg.sync import _process_media, input_peer
 
     async with SessionLocal() as db:
         row = (
-            await db.execute(select(Message).where(Message.media_key == key))
+            await db.execute(
+                select(Message).where(
+                    Message.account_id == account_id,
+                    Message.dialog_id == dialog_id,
+                    Message.tg_id == tg_id,
+                )
+            )
         ).scalar_one_or_none()
         if row is None:
-            return None
-        account_id = row.account_id
-        dialog_id = row.dialog_id
-        tg_id = row.tg_id
+            raise HTTPException(status_code=404, detail="Xabar topilmadi")
+        # allaqachon yuklangan bo'lsa — keshdan beramiz
+        if row.media_key and storage.exists(row.media_key):
+            try:
+                data, ct = storage.get(row.media_key)
+                return Response(content=data, media_type=ct)
+            except Exception:
+                pass
         dialog = (
             await db.execute(select(Dialog).where(Dialog.id == dialog_id))
         ).scalar_one_or_none()
         if dialog is None:
-            return None
+            raise HTTPException(status_code=404, detail="Dialog topilmadi")
         client = _mgr.get(account_id)
         if client is None:
-            return None
+            raise HTTPException(status_code=503, detail="Akkaunt ulangan emas")
         try:
-            from ..tg.sync import input_peer
-
             entity = await asyncio.wait_for(
                 client.get_entity(input_peer(dialog.tg_id, dialog.peer_type)), timeout=15.0
             )
-            src = await client.get_messages(entity, ids=tg_id)
+            src = await asyncio.wait_for(client.get_messages(entity, ids=tg_id), timeout=15.0)
             if src is None or not src.media:
-                return None
-            _, new_key = await asyncio.wait_for(_process_media(client, src), timeout=15.0)
+                raise HTTPException(status_code=404, detail="Media topilmadi")
+            _, new_key = await asyncio.wait_for(_process_media(client, src), timeout=20.0)
             if not new_key:
-                return None
+                raise HTTPException(status_code=502, detail="Media yuklanmadi")
             row.media_key = new_key
             await db.commit()
-            return storage.get(new_key)
+            data, ct = storage.get(new_key)
+            return Response(content=data, media_type=ct)
+        except HTTPException:
+            raise
         except Exception:
-            return None
+            raise HTTPException(status_code=502, detail="Media yuklanmadi")
+
+
+@router.get("/media/{key:path}")
+async def get_media(key: str):
+    """Allaqachon yuklangan media faylni xizmat qilish."""
+    try:
+        data, content_type = storage.get(key)
+        return Response(content=data, media_type=content_type)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=404, detail="Topilmadi") from e
