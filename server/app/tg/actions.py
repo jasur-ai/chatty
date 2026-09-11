@@ -87,10 +87,7 @@ async def sync_dialogs(account_id: int, limit: int = 200, force: bool = False) -
             )
         ).scalars().all()
         if existing and not force:
-            dialogs = [serialize_dialog(d) for d in existing]
-            if any(not d.photo_key for d in existing):
-                asyncio.create_task(backfill_avatars(account_id))
-            return dialogs
+            return [serialize_dialog(d) for d in existing]
 
     # 2) Birinchi yuklanish yoki force — Telegram'dan to'liq sinxronizatsiya.
     client = await _require_client(account_id)
@@ -108,7 +105,6 @@ async def sync_dialogs(account_id: int, limit: int = 200, force: bool = False) -
                 await db.flush()
                 dialogs.append(serialize_dialog(dialog))
             await db.commit()
-            asyncio.create_task(backfill_avatars(account_id))
             return dialogs
 
 

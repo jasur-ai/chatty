@@ -48,14 +48,18 @@ class R2Storage:
             except Exception:
                 self.client = None
 
+    _bucket_ok = False
+
     def _ensure_bucket(self) -> None:
-        if not self.client:
+        if not self.client or self._bucket_ok:
             return
         try:
             self.client.head_bucket(Bucket=self.bucket)
+            self._bucket_ok = True
         except Exception:
             try:
                 self.client.create_bucket(Bucket=self.bucket)
+                self._bucket_ok = True
             except Exception:
                 pass
 
@@ -83,15 +87,17 @@ class R2Storage:
         return f"/api/media/{key}"
 
     def exists(self, key: str) -> bool:
-        """Fayl hali ham saqlanayotganini tekshiradi (lokal yoki R2)."""
+        """Fayl mavjudligini tekshiradi.
+
+        R2 (S3) doimiy saqlash — media_key yozilgandan keyin fayl o'chmaydi,
+        shuning uchun har bir xabar uchun tarmoq so'rovi (head_object) qilmaymiz.
+        Lokal disk (Render ephemeral) uchun esa haqiqiy faylni tekshiramiz,
+        chunki redeploy'da fayllar o'chib ketishi mumkin.
+        """
         if not key:
             return False
         if self.client:
-            try:
-                self.client.head_object(Bucket=self.bucket, Key=key)
-                return True
-            except Exception:
-                pass
+            return True
         return (_LOCAL_DIR / key).exists()
 
     def get(self, key: str) -> tuple[bytes, str]:
