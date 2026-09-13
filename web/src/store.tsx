@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { api, dropToken, loadTokens, saveToken } from "./api";
-import type { Account, AppUserInfo, Dialog, Message, WsEvent } from "./types";
+import type { Account, AppUserInfo, DelegateDialog, DelegateMessage, Dialog, Message, WsEvent } from "./types";
 import { getTgUser, getWebApp } from "./telegram";
 import { ChattySocket } from "./ws";
 
@@ -26,6 +26,19 @@ interface Store {
   token: string | null;
   settingsOpen: boolean;
   lotusOpen: boolean;
+  view: "chats" | "delegate" | "admin";
+  delegateDialogs: DelegateDialog[];
+  activeDelegateDialog: DelegateDialog | null;
+  delegateMessages: DelegateMessage[];
+  delegateLoading: boolean;
+  delegateMessagesLoading: boolean;
+  setView: (v: "chats" | "delegate" | "admin") => void;
+  openAdmin: () => void;
+  closeAdmin: () => void;
+  loadDelegateDialogs: () => Promise<void>;
+  openDelegateDialog: (d: DelegateDialog) => Promise<void>;
+  delegateBack: () => void;
+  delegateSend: (text: string) => Promise<void>;
   openSettings: () => void;
   closeSettings: () => void;
   openLotus: () => void;
@@ -64,8 +77,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [chatsError, setChatsError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [lotusOpen, setLotusOpen] = useState(false);
+  const [view, setView] = useState<"chats" | "delegate" | "admin">("chats");
+  const [delegateDialogs, setDelegateDialogs] = useState<DelegateDialog[]>([]);
+  const [activeDelegateDialog, setActiveDelegateDialog] = useState<DelegateDialog | null>(null);
+  const [delegateMessages, setDelegateMessages] = useState<DelegateMessage[]>([]);
+  const [delegateLoading, setDelegateLoading] = useState(false);
+  const [delegateMessagesLoading, setDelegateMessagesLoading] = useState(false);
   const hasMoreRef = useRef(false);
   const activeRef = useRef<Dialog | null>(null);
+  const activeDelegateRef = useRef<DelegateDialog | null>(null);
   const socketRef = useRef<ChattySocket | null>(null);
 
   useEffect(() => {
@@ -109,6 +129,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             : m,
         ),
       );
+    } else if (ev.type === "delegate_message") {
+      setDelegateDialogs((prev) => {
+        const rest = prev.filter((d) => d.id !== ev.dialog.id);
+        return [ev.dialog, ...rest];
+      });
+      const active = activeDelegateRef.current;
+      if (active && active.id === ev.dialog.id) {
+        setDelegateMessages((prev) =>
+          prev.some((m) => m.id === ev.message.id) ? prev : [...prev, ev.message],
+        );
+      }
     }
   }
 
@@ -157,6 +188,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (prev && res.accounts.some((a) => a.id === prev.id)) return prev;
         const withToken = ready.find((a) => loadTokens()[a.id]);
         return withToken ?? ready[0] ?? null;
+      });
+      // appUser'ni tanlangan akkauntga moslab yangilash (admin/delegate tugmalari uchun)
+      setAppUser((prev) => {
+        if (prev) return prev;
+        const withToken = ready.find((a) => loadTokens()[a.id]);
+        const acc = withToken ?? ready[0];
+        return acc?.app_user ?? null;
       });
     } catch {
       /* ignore */
@@ -276,6 +314,88 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const openLotus = useCallback(() => setLotusOpen(true), []);
   const closeLotus = useCallback(() => setLotusOpen(false), []);
 
+  // ---- Delegat (vakil) + Admin ----
+  useEffect(() => {
+    activeDelegateRef.current = activeDelegateDialog;
+  }, [activeDelegateDialog]);
+
+  const isAdminLike = appUser?.is_admin || appUser?.is_owner;
+
+  const loadDelegateDialogs = useCallback(async () => {
+    const t = current ? loadTokens()[current.id] : null;
+    if (!t) return;
+    setDelegateLoading(true);
+    try {
+      const res = await api.delegateDialogs(t);
+      setDelegateDialogs(res.dialogs);
+    } catch {
+      /* ignore */
+    } finally {
+      setDelegateLoading(false);
+    }
+  }, [current]);
+
+  // Admin/owner bo'lsa va delegat ko'rinishiga o'tganda yuklash
+  useEffect(() => {
+    if (view === "delegate" && isAdminLike) void loadDelegateDialogs();
+  }, [view, isAdminLike, loadDelegateDialogs]);
+
+  const openDelegateDialog = useCallback(
+    async (d: DelegateDialog) => {
+      const t = current ? loadTokens()[current.id] : null;
+      if (!t) return;
+      setActiveDelegateDialog(d);
+      setDelegateMessagesLoading(true);
+      try {
+        const res = await api.delegateMessages(d.id, t);
+        setDelegateMessages(res.messages);
+        void api.delegateRead(d.id, t).then(() => {
+          setDelegateDialogs((prev) => prev.map((x) => (x.id === d.id ? { ...x, unread_count: 0 } : x)));
+        });
+      } catch {
+        setDelegateMessages([]);
+      } finally {
+        setDelegateMessagesLoading(false);
+      }
+    },
+    [current],
+  );
+
+  const delegateBack = useCallback(() => {
+    setActiveDelegateDialog(null);
+    setDelegateMessages([]);
+  }, []);
+
+  const delegateSend = useCallback(
+    async (text: string) => {
+      const t = current ? loadTokens()[current.id] : null;
+      if (!t || !activeDelegateDialog) return;
+      const dlg = activeDelegateDialog;
+      const optimistic: DelegateMessage = {
+        id: -Date.now(),
+        dialog_id: dlg.id,
+        direction: "out",
+        text,
+        media_type: "none",
+        media_url: null,
+        date: new Date().toISOString(),
+      };
+      setDelegateMessages((prev) => [...prev, optimistic]);
+      try {
+        const res = await api.delegateSend(dlg.id, { text }, t);
+        setDelegateMessages((prev) => prev.map((m) => (m.id === optimistic.id ? res.message : m)));
+        setDelegateDialogs((prev) => prev.map((d) => (d.id === dlg.id ? res.dialog : d)));
+      } catch (e) {
+        setDelegateMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+        console.error(e);
+      }
+    },
+    [current, activeDelegateDialog],
+  );
+
+  const openAdmin = useCallback(() => setView("admin"), []);
+  const closeAdmin = useCallback(() => setView("chats"), []);
+
   const silentLogin = useCallback(async (): Promise<boolean> => {
     // Telegram Mini App ichida — initData orqali avtomatik kirish (telefon/kod/2FA shart emas).
     const initData = getWebApp()?.initData ?? null;
@@ -324,6 +444,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       token,
       settingsOpen,
       lotusOpen,
+      view,
+      delegateDialogs,
+      activeDelegateDialog,
+      delegateMessages,
+      delegateLoading,
+      delegateMessagesLoading,
+      setView,
+      openAdmin,
+      closeAdmin,
+      loadDelegateDialogs,
+      openDelegateDialog,
+      delegateBack,
+      delegateSend,
       openSettings,
       closeSettings,
       openLotus,
@@ -353,6 +486,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       token,
       settingsOpen,
       lotusOpen,
+      view,
+      delegateDialogs,
+      activeDelegateDialog,
+      delegateMessages,
+      delegateLoading,
+      delegateMessagesLoading,
+      setView,
+      openAdmin,
+      closeAdmin,
+      loadDelegateDialogs,
+      openDelegateDialog,
+      delegateBack,
+      delegateSend,
       openSettings,
       closeSettings,
       openLotus,

@@ -51,7 +51,8 @@ export interface Message {
 export type WsEvent =
   | { type: "message"; dialog: Dialog; message: Message }
   | { type: "read_outbox"; dialog_id: number; max_tg_id: number }
-  | { type: "message_media"; dialog_id: number; tg_id: number; media_type: string; media_url: string };
+  | { type: "message_media"; dialog_id: number; tg_id: number; media_type: string; media_url: string }
+  | { type: "delegate_message"; dialog: DelegateDialog; message: DelegateMessage };
 
 export interface LoginResult {
   token: string;
@@ -80,6 +81,46 @@ export interface MusicPost {
   media_url: string | null;
   created_at: string | null;
   reactions: { user_tg_id: number; reaction: string; comment: string | null }[];
+}
+
+export interface AdminUser {
+  id: number;
+  phone: string;
+  first_name: string | null;
+  username: string | null;
+  bot_name: string | null;
+  auth_step: string;
+  is_active: boolean;
+  created_at: string | null;
+  tg_user_id: number | null;
+  is_owner: boolean;
+  is_admin: boolean;
+  is_vip: boolean;
+  theme: string;
+  dialogs_count: number;
+  messages_count: number;
+}
+
+export interface DelegateDialog {
+  id: number;
+  bot_chat_id: number;
+  first_name: string | null;
+  username: string | null;
+  last_msg_text: string | null;
+  last_msg_date: string | null;
+  last_out: boolean;
+  unread_count: number;
+  pinned: boolean;
+}
+
+export interface DelegateMessage {
+  id: number;
+  dialog_id: number;
+  direction: "in" | "out";
+  text: string;
+  media_type: string;
+  media_url?: string | null;
+  date: string | null;
 }
 
 export interface AdminAccount {

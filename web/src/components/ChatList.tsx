@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { resolveUrl } from "../env";
-import { IconLogout, IconMenu, IconPlus, IconSearch, IconSettings } from "../icons";
+import { IconBot, IconLogout, IconMenu, IconPlus, IconSearch, IconSettings, IconShield } from "../icons";
 import { useStore } from "../store";
 import { Avatar } from "./Avatar";
 
@@ -13,9 +13,11 @@ function formatTime(iso: string | null): string {
 }
 
 export function ChatList() {
-  const { accounts, current, dialogs, loadingChats, chatsError, selectAccount, openDialog, openSettings, logout } = useStore();
+  const { accounts, current, dialogs, loadingChats, chatsError, selectAccount, openDialog, openSettings, logout, appUser, setView } = useStore();
   const [search, setSearch] = useState("");
   const [switcherOpen, setSwitcherOpen] = useState(false);
+
+  const isAdminLike = appUser?.is_admin || appUser?.is_owner;
 
   const filtered = search
     ? dialogs.filter((d) => d.title.toLowerCase().includes(search.toLowerCase()))
@@ -107,6 +109,16 @@ export function ChatList() {
       </div>
 
       <footer className="sidebar-footer">
+        {isAdminLike && (
+          <button className="icon-btn" title="Bot suhbatlari (vakil)" onClick={() => setView("delegate")}>
+            <IconBot size={20} />
+          </button>
+        )}
+        {isAdminLike && (
+          <button className="icon-btn" title="Admin panel" onClick={() => setView("admin")}>
+            <IconShield size={20} />
+          </button>
+        )}
         <button className="icon-btn" title="Sozlamalar" onClick={openSettings}>
           <IconSettings size={20} />
         </button>

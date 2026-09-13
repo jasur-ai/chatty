@@ -58,6 +58,47 @@ async def overview(
         return {"accounts": out}
 
 
+@router.get("/users")
+async def list_users(
+    token_account: int = Depends(require_account),
+    db=Depends(get_session),
+):
+    """Barcha foydalanuvchilar ro'yxati (akkaunt + app_user + statistikalar)."""
+    await require_admin(token_account, db)
+    async with db:
+        accounts = (await db.execute(select(Account))).scalars().all()
+        app_users = {u.account_id: u for u in (await db.execute(select(AppUser))).scalars().all()}
+        out = []
+        for a in accounts:
+            u = app_users.get(a.id)
+            dialogs_n = (
+                await db.execute(select(Dialog).where(Dialog.account_id == a.id))
+            ).scalars().all()
+            msgs_n = (
+                await db.execute(select(Message).where(Message.account_id == a.id))
+            ).scalars().all()
+            out.append(
+                {
+                    "id": a.id,
+                    "phone": a.phone,
+                    "first_name": a.first_name,
+                    "username": a.username,
+                    "bot_name": a.bot_name or a.first_name,
+                    "auth_step": a.auth_step,
+                    "is_active": a.is_active,
+                    "created_at": a.created_at.isoformat() if a.created_at else None,
+                    "tg_user_id": u.tg_user_id if u else None,
+                    "is_owner": bool(u and u.is_owner),
+                    "is_admin": bool(u and u.is_admin),
+                    "is_vip": bool(u and u.is_vip),
+                    "theme": u.theme if u else "default",
+                    "dialogs_count": len(dialogs_n),
+                    "messages_count": len(msgs_n),
+                }
+            )
+        return {"users": out}
+
+
 @router.post("/vip")
 async def set_vip(
     body: VipIn,

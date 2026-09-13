@@ -1,9 +1,12 @@
 import type {
   Account,
   AdminAccount,
+  AdminUser,
   Analytics,
   BotSettings,
   Contact,
+  DelegateDialog,
+  DelegateMessage,
   Dialog,
   ForwardRule,
   LoginResult,
@@ -220,6 +223,30 @@ export const api = {
   // ---- Admin ----
   adminOverview: (token: string) =>
     req<{ accounts: AdminAccount[] }>("/api/admin/overview", {}, token),
+
+  adminUsers: (token: string) =>
+    req<{ users: AdminUser[] }>("/api/admin/users", {}, token),
+
+  // ---- Delegat (vakil) ----
+  delegateDialogs: (token: string) =>
+    req<{ dialogs: DelegateDialog[] }>("/api/delegate/dialogs", {}, token),
+
+  delegateMessages: (dialogId: number, token: string, before?: number) =>
+    req<{ messages: DelegateMessage[]; has_more: boolean }>(
+      `/api/delegate/dialogs/${dialogId}/messages${before ? `?before=${before}` : ""}`,
+      {},
+      token,
+    ),
+
+  delegateSend: (dialogId: number, body: { text: string; media_type?: string; file_id?: string }, token: string) =>
+    req<{ message: DelegateMessage; dialog: DelegateDialog }>(
+      `/api/delegate/dialogs/${dialogId}/send`,
+      { method: "POST", body: JSON.stringify(body) },
+      token,
+    ),
+
+  delegateRead: (dialogId: number, token: string) =>
+    req<{ ok: boolean }>(`/api/delegate/dialogs/${dialogId}/read`, { method: "POST" }, token),
 
   setVip: (accountId: number, vip: boolean, token: string) =>
     req<{ ok: boolean }>("/api/admin/vip", { method: "POST", body: JSON.stringify({ account_id: accountId, vip }) }, token),

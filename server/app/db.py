@@ -281,6 +281,45 @@ class Setting(Base):
     value: Mapped[str] = mapped_column(Text, default="")
 
 
+class DelegateDialog(Base):
+    """Delegat-bot suhbati: begona odam @chattiey_bot'ga yozgan shaxsiy chat.
+
+    Bot egasi (owner) bu suhbatlarni mini app'da ko'radi va javob beradi —
+    javob bot nomidan begonaga yetib boradi (vakil/delegate).
+    """
+
+    __tablename__ = "delegate_dialogs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    bot_chat_id: Mapped[int] = mapped_column(BigInteger, unique=True)  # begonaning Telegram chat_id
+    first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    username: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_msg_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_msg_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_out: Mapped[bool] = mapped_column(Boolean, default=False)
+    unread_count: Mapped[int] = mapped_column(Integer, default=0)
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class DelegateMessage(Base):
+    """Delegat-bot suhbatidagi bitta xabar (begona ↔ bot egasi)."""
+
+    __tablename__ = "delegate_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dialog_id: Mapped[int] = mapped_column(ForeignKey("delegate_dialogs.id", ondelete="CASCADE"), index=True)
+    direction: Mapped[str] = mapped_column(String(4), default="in")  # in = begonadan, out = egadan
+    text: Mapped[str] = mapped_column(Text, default="")
+    media_type: Mapped[str] = mapped_column(String(16), default="none")  # none|photo|voice|video|file|...
+    media_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    file_id: Mapped[str | None] = mapped_column(String(512), nullable=True)  # Telegram bot API file_id
+    # Bot egasiga forward qilingan xabarning message_id (Telegram'da reply orqali javob uchun)
+    owner_notify_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    date: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Admin(Base):
     """Adminlar ro'yxati (owner tomonidan qo'shiladi). tg_user_id bo'yicha."""
 
