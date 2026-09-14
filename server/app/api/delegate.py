@@ -22,6 +22,7 @@ class SendIn(BaseModel):
     text: str = ""
     media_type: str = "none"
     file_id: str | None = None
+    media_key: str | None = None  # R2'ga yuklangan fayl (mini app'dan)
 
 
 def _msg(m: DelegateMessage) -> dict:
@@ -75,7 +76,17 @@ async def send_message(
         raise HTTPException(status_code=404, detail="Suhbat topilmadi")
 
     text = body.text.strip()
-    if body.media_type != "none" and body.file_id:
+    if body.media_key:
+        # Mini app'dan yuklangan fayl — R2'dan olib, bot API orqali begonaga yuboramiz.
+        try:
+            data, _ct = storage.get(body.media_key)
+        except Exception:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail="Fayl topilmadi") from None
+        ext = _ext_for(body.media_type)
+        sent_id = await notifier.send_media_file(
+            dlg.bot_chat_id, data, f"media{ext}", body.media_type, text
+        )
+    elif body.media_type != "none" and body.file_id:
         sent_id = await notifier.send_media(dlg.bot_chat_id, body.file_id, body.media_type, text)
     elif text:
         sent_id = await notifier.send_text(dlg.bot_chat_id, text)
@@ -93,6 +104,7 @@ async def send_message(
         text=text,
         media_type=body.media_type,
         file_id=body.file_id,
+        media_key=body.media_key,
     )
     db.add(out)
     dlg.last_msg_text = text or (body.media_type if body.media_type != "none" else "")

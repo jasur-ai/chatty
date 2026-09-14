@@ -158,6 +158,36 @@ class BotNotifier:
             return data["result"]["message_id"]
         return None
 
+    async def send_media_file(
+        self, chat_id: int, data: bytes, filename: str, media_type: str, caption: str = ""
+    ) -> int | None:
+        """Begonaga raw fayl yuboradi (multipart orqali — file_id shart emas)."""
+        method, field = {
+            "photo": ("sendPhoto", "photo"),
+            "voice": ("sendVoice", "voice"),
+            "audio": ("sendAudio", "audio"),
+            "video": ("sendVideo", "video"),
+            "round": ("sendVideoNote", "video_note"),
+            "file": ("sendDocument", "document"),
+        }.get(media_type, ("sendDocument", "document"))
+        if not self.enabled:
+            return None
+        try:
+            async with httpx.AsyncClient(timeout=60) as c:
+                files = {field: (filename, data, "application/octet-stream")}
+                payload: dict = {"chat_id": str(chat_id)}
+                if caption:
+                    payload["caption"] = caption
+                r = await c.post(f"{self.base}/{method}", data=payload, files=files)
+                j = r.json()
+                if j.get("ok"):
+                    return j["result"]["message_id"]
+                log.warning("Bot API %s xato: %s", method, j.get("description"))
+                return None
+        except Exception as e:  # noqa: BLE001
+            log.warning("Bot API %s xato: %s", method, e)
+            return None
+
     async def get_file(self, file_id: str) -> bytes | None:
         """getFile orqali faylni yuklab oladi (mini app media ko'rsatish uchun)."""
         data = await self._post("getFile", {"file_id": file_id})
@@ -186,11 +216,18 @@ class BotNotifier:
         log.info("Bot polling boshlandi (@chattiey_bot)")
 
     async def _setup_commands(self) -> None:
+        """Bot menyusiga komandalarni qo'shadi (Telegram'da '/' bosilganda ko'rinadi)."""
         commands = [
             {"command": "start", "description": "Botni ishga tushirish"},
             {"command": "open", "description": "Chatty ilovasini ochish"},
-            {"command": "help", "description": "Yordam va qo'llanma"},
+            {"command": "list", "description": "Botga yozgan odamlar ro'yxati"},
+            {"command": "music", "description": "Musiqalar ro'yxati"},
+            {"command": "autoreply", "description": "Avto-javobni yoqish/o'chirish"},
+            {"command": "users", "description": "Foydalanuvchilar ro'yxati (admin)"},
+            {"command": "vip", "description": "Foydalanuvchini VIP qilish (admin)"},
+            {"command": "report", "description": "AI hisobot (admin)"},
             {"command": "status", "description": "Ulanish holatini ko'rish"},
+            {"command": "help", "description": "Yordam va qo'llanma"},
         ]
         try:
             async with httpx.AsyncClient() as c:
@@ -251,8 +288,8 @@ class BotNotifier:
 
         if from_id == self.owner_id:
             # Owner: komandalar + delegat javob (reply orqali)
-            if cmd in ("/start", "/open", "/help", "/status"):
-                await self._handle_command(chat["id"], cmd)
+            if cmd:
+                await self._handle_command(chat["id"], cmd, msg)
             elif msg.get("reply_to_message"):
                 await self._handle_owner_reply(msg)
             else:
@@ -265,7 +302,7 @@ class BotNotifier:
             # Begona odam: har bir xabar (shu jumladan /start) egaga relay qilinadi.
             await self._handle_stranger_message(msg)
 
-    async def _handle_command(self, chat_id: int, cmd: str) -> None:
+    async def _handle_command(self, chat_id: int, cmd: str, msg: dict | None = None) -> None:
         if cmd == "/start":
             await self._send_open_button(
                 chat_id,
@@ -286,7 +323,12 @@ class BotNotifier:
                 "Komandalar:\n"
                 "/start — boshlash\n"
                 "/open — ilovani ochish\n"
-                "/help — yordam\n"
+                "/list — botga yozgan odamlar\n"
+                "/music — musiqalar\n"
+                "/autoreply — avto-javobni yoqish/o'chirish\n"
+                "/users — foydalanuvchilar (admin)\n"
+                "/vip <id> — VIP qilish (admin)\n"
+                "/report — AI hisobot (admin)\n"
                 "/status — ulanish holati",
             )
         elif cmd == "/status":
@@ -298,6 +340,146 @@ class BotNotifier:
                 f"Ulangan akkauntlar: {n} ta.\n"
                 "Ulanish holatini to'liq ko'rish uchun ilovani oching.",
             )
+        elif cmd == "/list":
+            await self._cmd_list_dialogs(chat_id)
+        elif cmd == "/music":
+            await self._cmd_music(chat_id)
+        elif cmd == "/autoreply":
+            await self._cmd_autoreply(chat_id, msg)
+        elif cmd == "/users":
+            await self._cmd_users(chat_id)
+        elif cmd == "/vip":
+            await self._cmd_vip(chat_id, msg)
+        elif cmd == "/report":
+            await self._cmd_report(chat_id)
+
+    async def _cmd_list_dialogs(self, chat_id: int) -> None:
+        from sqlalchemy import select
+
+        from .db import DelegateDialog, SessionLocal
+
+        async with SessionLocal() as db:
+            rows = (
+                await db.execute(
+                    select(DelegateDialog).order_by(DelegateDialog.last_msg_date.desc().nullslast()).limit(15)
+                )
+            ).scalars().all()
+        if not rows:
+            await self.send_notification(chat_id, "Hozircha hech kim botga yozmagan.")
+            return
+        lines = ["Botga yozganlar:"]
+        for i, d in enumerate(rows, 1):
+            name = d.first_name or d.username or "Foydalanuvchi"
+            last = (d.last_msg_text or "")[:40]
+            lines.append(f"{i}. {name} — {last}")
+        await self.send_notification(chat_id, "\n".join(lines))
+
+    async def _cmd_music(self, chat_id: int) -> None:
+        from sqlalchemy import select
+
+        from .db import MusicPost, SessionLocal
+
+        async with SessionLocal() as db:
+            rows = (
+                await db.execute(select(MusicPost).order_by(MusicPost.created_at.desc()).limit(15))
+            ).scalars().all()
+        if not rows:
+            await self.send_notification(chat_id, "Musiqalar hozircha yo'q.")
+            return
+        lines = ["Musiqalar:"]
+        for i, p in enumerate(rows, 1):
+            line = f"{i}. {p.title}"
+            if p.performer:
+                line += f" — {p.performer}"
+            lines.append(line)
+        await self.send_notification(chat_id, "\n".join(lines))
+
+    async def _cmd_autoreply(self, chat_id: int, msg: dict | None) -> None:
+        from sqlalchemy import select
+
+        from .db import Account, AppUser, SessionLocal
+
+        arg = (msg.get("text") or "").split()
+        async with SessionLocal() as db:
+            acc = (
+                await db.execute(select(Account).where(Account.auth_step == "ready").limit(1))
+            ).scalar_one_or_none()
+            if acc is None:
+                await self.send_notification(chat_id, "Akkaunt topilmadi.")
+                return
+            u = (
+                await db.execute(select(AppUser).where(AppUser.account_id == acc.id))
+            ).scalar_one_or_none()
+            if u is None:
+                u = AppUser(account_id=acc.id)
+                db.add(u)
+            if len(arg) > 1 and arg[1].lower() in ("on", "off", "yoqish", "o'chirish"):
+                u.auto_reply_enabled = arg[1].lower() in ("on", "yoqish")
+            else:
+                u.auto_reply_enabled = not u.auto_reply_enabled
+            state = u.auto_reply_enabled
+            await db.commit()
+        await self.send_notification(
+            chat_id,
+            f"Avto-javob: {'YOQILGAN' if state else 'O\'CHIRILGAN'}.",
+        )
+
+    async def _cmd_users(self, chat_id: int) -> None:
+        from sqlalchemy import select
+
+        from .db import Account, AppUser, SessionLocal
+
+        async with SessionLocal() as db:
+            accounts = (await db.execute(select(Account))).scalars().all()
+            users = {u.account_id: u for u in (await db.execute(select(AppUser))).scalars().all()}
+        lines = ["Foydalanuvchilar:"]
+        for a in accounts:
+            u = users.get(a.id)
+            tag = "OWNER" if (u and u.is_owner) else ("VIP" if (u and u.is_vip) else "")
+            name = a.bot_name or a.first_name or a.phone
+            lines.append(f"{a.id}. {name} ({a.phone}) {tag}".strip())
+        await self.send_notification(chat_id, "\n".join(lines))
+
+    async def _cmd_vip(self, chat_id: int, msg: dict | None) -> None:
+        from sqlalchemy import select
+
+        from .db import AppUser, SessionLocal
+
+        parts = (msg.get("text") or "").split()
+        if len(parts) < 2 or not parts[1].isdigit():
+            await self.send_notification(chat_id, "Ishlatish: /vip <foydalanuvchi id>")
+            return
+        acc_id = int(parts[1])
+        async with SessionLocal() as db:
+            u = (
+                await db.execute(select(AppUser).where(AppUser.account_id == acc_id))
+            ).scalar_one_or_none()
+            if u is None:
+                await self.send_notification(chat_id, f"{acc_id} id'li foydalanuvchi topilmadi.")
+                return
+            u.is_vip = not u.is_vip
+            state = u.is_vip
+            await db.commit()
+        await self.send_notification(
+            chat_id,
+            f"{acc_id} id'li foydalanuvchi {'VIP qilindi' if state else 'VIP dan olindi'}.",
+        )
+
+    async def _cmd_report(self, chat_id: int) -> None:
+        from sqlalchemy import select
+
+        from .db import AdminReport, SessionLocal
+
+        async with SessionLocal() as db:
+            rows = (
+                await db.execute(select(AdminReport).order_by(AdminReport.created_at.desc()).limit(3))
+            ).scalars().all()
+        if not rows:
+            await self.send_notification(chat_id, "AI hisobotlar hozircha yo'q.")
+            return
+        for r in rows:
+            body = r.body[:4000]
+            await self.send_notification(chat_id, body)
 
     async def _send_open_button(self, chat_id: int, text: str) -> None:
         await self.send_notification(

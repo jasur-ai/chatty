@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { resolveUrl } from "../env";
-import { IconBot, IconLogout, IconMenu, IconSearch, IconSettings, IconShield } from "../icons";
+import { IconBot, IconLogout, IconMenu, IconSearch, IconSettings, IconShield, IconStar } from "../icons";
 import { useStore } from "../store";
 import { Avatar } from "./Avatar";
 
@@ -13,7 +13,7 @@ function formatTime(iso: string | null): string {
 }
 
 export function ChatList() {
-  const { accounts, current, dialogs, loadingChats, chatsError, selectAccount, openDialog, openSettings, logout, appUser, setView } = useStore();
+  const { accounts, current, dialogs, loadingChats, chatsError, selectAccount, openDialog, openSettings, openLotus, logout, appUser, setView } = useStore();
   const [search, setSearch] = useState("");
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
@@ -108,20 +108,28 @@ export function ChatList() {
 
       <footer className="sidebar-footer">
         {isAdminLike && (
-          <button className="icon-btn" title="Bot suhbatlari (vakil)" onClick={() => setView("delegate")}>
-            <IconBot size={20} />
+          <button className="footer-btn" title="Bot suhbatlari (vakil)" onClick={() => setView("delegate")}>
+            <IconBot size={22} />
+            <span>Bot</span>
           </button>
         )}
         {isAdminLike && (
-          <button className="icon-btn" title="Admin panel" onClick={() => setView("admin")}>
-            <IconShield size={20} />
+          <button className="footer-btn" title="Admin panel" onClick={() => setView("admin")}>
+            <IconShield size={22} />
+            <span>Admin</span>
           </button>
         )}
-        <button className="icon-btn" title="Sozlamalar" onClick={openSettings}>
-          <IconSettings size={20} />
+        <button className="footer-btn" title="Lotus 0.0.1" onClick={openLotus}>
+          <IconStar size={22} />
+          <span>Lotus</span>
         </button>
-        <button className="icon-btn" title="Chiqish" onClick={() => void logout()}>
-          <IconLogout size={20} />
+        <button className="footer-btn" title="Sozlamalar" onClick={openSettings}>
+          <IconSettings size={22} />
+          <span>Sozlamalar</span>
+        </button>
+        <button className="footer-btn" title="Chiqish" onClick={() => void logout()}>
+          <IconLogout size={22} />
+          <span>Chiqish</span>
         </button>
       </footer>
     </aside>

@@ -38,7 +38,7 @@ interface Store {
   loadDelegateDialogs: () => Promise<void>;
   openDelegateDialog: (d: DelegateDialog) => Promise<void>;
   delegateBack: () => void;
-  delegateSend: (text: string) => Promise<void>;
+  delegateSend: (text: string, mediaKey?: string, mediaType?: string) => Promise<void>;
   openSettings: () => void;
   closeSettings: () => void;
   openLotus: () => void;
@@ -368,7 +368,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const delegateSend = useCallback(
-    async (text: string) => {
+    async (text: string, mediaKey?: string, mediaType?: string) => {
       const t = current ? loadTokens()[current.id] : null;
       if (!t || !activeDelegateDialog) return;
       const dlg = activeDelegateDialog;
@@ -377,13 +377,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         dialog_id: dlg.id,
         direction: "out",
         text,
-        media_type: "none",
+        media_type: mediaType ?? "none",
         media_url: null,
         date: new Date().toISOString(),
       };
       setDelegateMessages((prev) => [...prev, optimistic]);
       try {
-        const res = await api.delegateSend(dlg.id, { text }, t);
+        const res = await api.delegateSend(dlg.id, { text, media_key: mediaKey, media_type: mediaType ?? "none" }, t);
         setDelegateMessages((prev) => prev.map((m) => (m.id === optimistic.id ? res.message : m)));
         setDelegateDialogs((prev) => prev.map((d) => (d.id === dlg.id ? res.dialog : d)));
       } catch (e) {

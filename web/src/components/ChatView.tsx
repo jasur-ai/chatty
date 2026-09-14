@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { resolveUrl } from "../env";
-import { IconBack, IconSpinner } from "../icons";
+import { IconBack, IconSpinner, IconStar } from "../icons";
 import { useStore } from "../store";
 import type { Message } from "../types";
 import { Avatar } from "./Avatar";
@@ -19,7 +19,7 @@ function DayDivider({ iso }: { iso: string }) {
 }
 
 export function ChatView() {
-  const { current, activeDialog, messages, loadingMessages, backToList, loadMore } = useStore();
+  const { current, activeDialog, messages, loadingMessages, backToList, loadMore, openLotus } = useStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevFirstRef = useRef<number | null>(null);
   const stickBottom = useRef(true);
@@ -60,6 +60,9 @@ export function ChatView() {
             {activeDialog.type === "user" ? "oxirgi marta yaqinda" : `${activeDialog.type === "chat" ? "guruh" : "kanal"}`}
           </div>
         </div>
+        <button className="icon-btn" title="Lotus 0.0.1" onClick={openLotus}>
+          <IconStar size={22} />
+        </button>
       </header>
 
       <div

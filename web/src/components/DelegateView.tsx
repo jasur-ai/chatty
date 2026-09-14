@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { api } from "../api";
 import { resolveUrl } from "../env";
-import { IconBack, IconBot, IconSend, IconSpinner } from "../icons";
+import { IconBack, IconBot, IconMic, IconPlus, IconSend, IconSpinner, IconStory } from "../icons";
 import { useStore } from "../store";
 import { Avatar } from "./Avatar";
 
@@ -87,11 +88,31 @@ export function DelegateView() {
 }
 
 function DelegateChat() {
-  const { activeDelegateDialog, delegateMessages, delegateMessagesLoading, delegateBack, delegateSend } = useStore();
+  const { current, token, activeDelegateDialog, delegateMessages, delegateMessagesLoading, delegateBack, delegateSend } = useStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [recording, setRecording] = useState<"voice" | "round" | null>(null);
+  const [recSeconds, setRecSeconds] = useState(0);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const recStartRef = useRef(0);
+
+  useEffect(() => {
+    if (!recording) {
+      setRecSeconds(0);
+      return;
+    }
+    recStartRef.current = Date.now();
+    setRecSeconds(0);
+    const t = setInterval(() => {
+      setRecSeconds(Math.floor((Date.now() - recStartRef.current) / 1000));
+    }, 500);
+    return () => clearInterval(t);
+  }, [recording]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -100,7 +121,7 @@ function DelegateChat() {
 
   async function send() {
     const t = text.trim();
-    if (!t || busy) return;
+    if ((!t && !busy) || busy) return;
     setBusy(true);
     setError("");
     setText("");
@@ -111,6 +132,64 @@ function DelegateChat() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function onFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !current || !token || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const up = await api.uploadMedia(current.id, file, token);
+      await delegateSend(text.trim(), up.media_key, up.media_type);
+      setText("");
+    } catch (err) {
+      setError((err as Error).message || "Yuborilmadi");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function startRecording(kind: "voice" | "round") {
+    if (!current || !token || recording) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: kind === "voice",
+        video: kind === "round",
+      });
+      streamRef.current = stream;
+      const mime = kind === "voice" ? "audio/webm" : "video/webm";
+      const rec = new MediaRecorder(stream, { mimeType: mime });
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => chunksRef.current.push(e.data);
+      rec.onstop = async () => {
+        const blob = new Blob(chunksRef.current, { type: mime });
+        const file = new File([blob], `${kind}-${Date.now()}.webm`, { type: mime });
+        setBusy(true);
+        try {
+          const up = await api.uploadMedia(current!.id, file, token!);
+          await delegateSend("", up.media_key, up.media_type);
+        } catch (err) {
+          setError((err as Error).message);
+        } finally {
+          setBusy(false);
+        }
+      };
+      rec.start();
+      mediaRecorderRef.current = rec;
+      setRecording(kind);
+    } catch {
+      setError("Mikrofon/kamera ruxsati yo'q");
+    }
+  }
+
+  function stopRecording() {
+    mediaRecorderRef.current?.stop();
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    mediaRecorderRef.current = null;
+    setRecording(null);
   }
 
   if (!activeDelegateDialog) return null;
@@ -169,13 +248,54 @@ function DelegateChat() {
       </div>
 
       <footer className="composer">
+        {recording && (
+          <div className="rec-banner">
+            <span className="rec-dot" />
+            <span>
+              {recording === "voice" ? "Ovozli xabar" : "Dumaloq video"} yozilmoqda — {Math.floor(recSeconds / 60)}:{String(recSeconds % 60).padStart(2, "0")}
+            </span>
+            <button className="btn danger" onClick={stopRecording}>To'xtatish va yuborish</button>
+          </div>
+        )}
         {error && <div className="composer-error">{error}</div>}
         <div className="composer-row">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*,audio/*,video/*"
+            style={{ display: "none" }}
+            onChange={onFileSelected}
+          />
+          <button
+            className="icon-btn attach"
+            title="Rasm/audio/video qo'shish"
+            disabled={busy || !!recording}
+            onClick={() => fileRef.current?.click()}
+          >
+            {busy ? <IconSpinner size={22} /> : <IconPlus size={24} />}
+          </button>
+          <button
+            className={`icon-btn attach ${recording === "voice" ? "rec" : ""}`}
+            title={recording === "voice" ? "To'xtatish" : "Ovozli xabar"}
+            disabled={busy || recording === "round"}
+            onClick={() => (recording === "voice" ? stopRecording() : void startRecording("voice"))}
+          >
+            <IconMic size={22} />
+          </button>
+          <button
+            className={`icon-btn attach ${recording === "round" ? "rec" : ""}`}
+            title={recording === "round" ? "To'xtatish" : "Dumaloq video"}
+            disabled={busy || recording === "voice"}
+            onClick={() => (recording === "round" ? stopRecording() : void startRecording("round"))}
+          >
+            <IconStory size={22} />
+          </button>
           <textarea
             className="composer-input"
             placeholder="Javob yozish... (bot nomidan ketadi)"
             rows={1}
             value={text}
+            disabled={busy || !!recording}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -184,7 +304,7 @@ function DelegateChat() {
               }
             }}
           />
-          <button className="btn send" disabled={!text.trim() || busy} onClick={() => void send()} title="Yuborish">
+          <button className="btn send" disabled={(!text.trim() && !busy) || busy || !!recording} onClick={() => void send()} title="Yuborish">
             <IconSend size={22} />
           </button>
         </div>

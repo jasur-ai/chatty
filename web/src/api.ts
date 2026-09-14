@@ -238,7 +238,7 @@ export const api = {
       token,
     ),
 
-  delegateSend: (dialogId: number, body: { text: string; media_type?: string; file_id?: string }, token: string) =>
+  delegateSend: (dialogId: number, body: { text: string; media_type?: string; file_id?: string; media_key?: string }, token: string) =>
     req<{ message: DelegateMessage; dialog: DelegateDialog }>(
       `/api/delegate/dialogs/${dialogId}/send`,
       { method: "POST", body: JSON.stringify(body) },
