@@ -89,7 +89,8 @@ export function Composer() {
     if (!current || !token || !activeDialog || recording) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: kind === "voice",
+        // Ovozli xabar: faqat audio. Dumaloq video: audio + video (kamera).
+        audio: true,
         video: kind === "round",
       });
       streamRef.current = stream;
