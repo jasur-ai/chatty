@@ -1206,6 +1206,30 @@ textarea {
   border-top: 1px solid var(--divider);
 }
 
+/* Suzuvchi Lotus tugmasi — o'ng tomonda, yozish maydoniga tegmaydi */
+.lotus-fab {
+  position: fixed;
+  right: 16px;
+  bottom: 84px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #7c4dff, #b388ff);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 20px rgba(124, 77, 255, 0.4);
+  z-index: 40;
+  transition: transform 0.15s;
+}
+
+.lotus-fab:hover {
+  transform: scale(1.08);
+}
+
 /* Admin */
 .admin-list {
   display: flex;

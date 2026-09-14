@@ -169,7 +169,8 @@ function DelegateChat() {
         setBusy(true);
         try {
           const up = await api.uploadMedia(current!.id, file, token!);
-          await delegateSend("", up.media_key, up.media_type);
+          // kind — "voice" (ovozli xabar) yoki "round" (dumaloq video)
+          await delegateSend("", up.media_key, kind);
         } catch (err) {
           setError((err as Error).message);
         } finally {

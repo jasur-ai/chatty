@@ -40,11 +40,40 @@ export function dropToken(accountId: number) {
   localStorage.setItem(TOKEN_KEY, JSON.stringify(all));
 }
 
+/** Server xatoligini har doim o'qiladigan matnga aylantiradi
+ *  (FastAPI 422 da `detail` array bo'ladi — aks holda "[object Object]" chiqadi). */
+function detailToMessage(detail: unknown): string {
+  if (detail == null) return "Noma'lum xato";
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((d) => {
+        if (typeof d === "string") return d;
+        if (d && typeof d === "object") {
+          const o = d as { msg?: string; loc?: unknown[] };
+          if (o.msg) {
+            const loc = Array.isArray(o.loc) ? o.loc.join(".") : "";
+            return loc ? `${loc}: ${o.msg}` : o.msg;
+          }
+        }
+        return "";
+      })
+      .filter(Boolean);
+    return parts.join("; ") || "Noma'lum xato";
+  }
+  if (typeof detail === "object") {
+    return JSON.stringify(detail);
+  }
+  return String(detail);
+}
+
 async function req<T>(path: string, init: RequestInit = {}, token?: string, timeoutMs = 20000): Promise<T> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(init.headers as Record<string, string>),
-  };
+  const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
+  // JSON so'rovlar uchun Content-Type; FormData uchun qo'ymaymiz
+  // (aks holda multipart boundary buziladi va server 422 qaytaradi).
+  if (init.body && !(init.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
   if (token) headers["Authorization"] = `Bearer ${token}`;
   // Timeout — server javob bermasa frontend osilib qolmasin.
   // Render bepul tarifi uyqudan 30-60s da uyg'onadi, shuning uchun auth so'rovlarida 90s.
@@ -53,14 +82,14 @@ async function req<T>(path: string, init: RequestInit = {}, token?: string, time
   try {
     const res = await fetch(API_BASE + path, { ...init, headers, signal: ctrl.signal });
     if (!res.ok) {
-      let detail = res.statusText;
+      let detail: unknown = res.statusText;
       try {
         const body = await res.json();
-        detail = body.detail || detail;
+        detail = body.detail ?? detail;
       } catch {
         /* ignore */
       }
-      throw new Error(detail);
+      throw new Error(detailToMessage(detail));
     }
     return res.json() as Promise<T>;
   } catch (e) {
