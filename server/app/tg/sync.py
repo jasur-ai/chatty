@@ -97,9 +97,12 @@ async def _process_media(client, msg, deadline: float | None = None) -> tuple[st
         return "none", None
     if deadline is not None and time.monotonic() > deadline:
         return media_type_of(msg), None
+    # Katta media (video/round/audio) uchun ko'proq vaqt beramiz — aks holda
+    # "video yuklanmay qoladi" (timeout). Rasm/ovoz kichik, 6s yetarli.
+    _timeout = 30.0 if media_type_of(msg) in ("video", "round", "audio", "file") else 6.0
     try:
         data = await _asyncio.wait_for(
-            client.download_media(msg, file=io.BytesIO()), timeout=6.0
+            client.download_media(msg, file=io.BytesIO()), timeout=_timeout
         )
         if data is None:
             return media_type_of(msg), None

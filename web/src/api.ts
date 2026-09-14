@@ -195,10 +195,12 @@ export const api = {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("account_id", String(accountId));
+    // Katta video/audio uchun uzoq timeout (20s default yetmasligi mumkin)
     return req<{ media_key: string; media_type: string; size: number }>(
       "/api/media/upload",
       { method: "POST", body: fd },
       token,
+      180000,
     );
   },
 

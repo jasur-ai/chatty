@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
 import { resolveUrl } from "../env";
-import { IconCheck, IconCheckDouble, IconDownload, IconEdit, IconReply, IconStar, IconTrash, IconX } from "../icons";
+import { IconCheck, IconCheckDouble, IconDownload, IconEdit, IconReply, IconSpinner, IconStar, IconTrash, IconX } from "../icons";
 import { useStore } from "../store";
 import type { Message } from "../types";
 
@@ -11,32 +11,104 @@ function fmtTime(iso: string | null): string {
 }
 
 function MediaContent({ msg }: { msg: Message }) {
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const url = resolveUrl(msg.media_url);
   if (!url) {
     return <div className="media-placeholder"><span>Media</span></div>;
   }
   switch (msg.media_type) {
     case "photo":
-      return <img src={url} alt="Rasm" className="media-img" loading="lazy" />;
+      return (
+        <>
+          {state === "loading" && <div className="media-loading"><IconSpinner size={16} /> Yuklanmoqda…</div>}
+          {state !== "error" && (
+            <img
+              src={url}
+              alt="Rasm"
+              className="media-img"
+              loading="lazy"
+              style={state === "loading" ? { display: "none" } : undefined}
+              onLoad={() => setState("ready")}
+              onError={() => setState("error")}
+            />
+          )}
+          {state === "error" && <div className="media-error">Rasm yuklanmadi</div>}
+        </>
+      );
     case "video":
       return (
-        <video src={url} controls className="media-img" preload="metadata" />
+        <>
+          {state === "loading" && <div className="media-loading"><IconSpinner size={16} /> Yuklanmoqda…</div>}
+          {state !== "error" && (
+            <video
+              src={url}
+              controls
+              className="media-img"
+              preload="auto"
+              style={state === "loading" ? { display: "none" } : undefined}
+              onLoadedData={() => setState("ready")}
+              onError={() => setState("error")}
+            />
+          )}
+          {state === "error" && <div className="media-error">Video yuklanmadi</div>}
+        </>
       );
     case "round":
       return (
-        <video
-          src={url}
-          controls
-          playsInline
-          className="media-round"
-          preload="metadata"
-        />
+        <>
+          {state === "loading" && <div className="media-loading"><IconSpinner size={16} /> Yuklanmoqda…</div>}
+          {state !== "error" && (
+            <video
+              src={url}
+              controls
+              playsInline
+              className="media-round"
+              preload="auto"
+              style={state === "loading" ? { display: "none" } : undefined}
+              onLoadedData={() => setState("ready")}
+              onError={() => setState("error")}
+            />
+          )}
+          {state === "error" && <div className="media-error">Video yuklanmadi</div>}
+        </>
       );
     case "voice":
     case "audio":
-      return <audio src={url} controls className="media-audio" preload="metadata" />;
+      return (
+        <>
+          {state === "loading" && <div className="media-loading"><IconSpinner size={16} /> Yuklanmoqda…</div>}
+          {state !== "error" && (
+            <audio
+              src={url}
+              controls
+              className="media-audio"
+              preload="auto"
+              style={state === "loading" ? { display: "none" } : undefined}
+              onLoadedData={() => setState("ready")}
+              onError={() => setState("error")}
+            />
+          )}
+          {state === "error" && <div className="media-error">Audio yuklanmadi</div>}
+        </>
+      );
     case "gif":
-      return <img src={url} alt="GIF" className="media-img" loading="lazy" />;
+      return (
+        <>
+          {state === "loading" && <div className="media-loading"><IconSpinner size={16} /> Yuklanmoqda…</div>}
+          {state !== "error" && (
+            <img
+              src={url}
+              alt="GIF"
+              className="media-img"
+              loading="lazy"
+              style={state === "loading" ? { display: "none" } : undefined}
+              onLoad={() => setState("ready")}
+              onError={() => setState("error")}
+            />
+          )}
+          {state === "error" && <div className="media-error">GIF yuklanmadi</div>}
+        </>
+      );
     case "file":
     default:
       return (

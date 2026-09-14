@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { resolveUrl } from "../env";
-import { IconBot, IconLogout, IconMenu, IconSearch, IconSettings, IconShield, IconStar } from "../icons";
+import { IconBot, IconLogout, IconMenu, IconSearch, IconSettings, IconShield } from "../icons";
 import { useStore } from "../store";
 import { Avatar } from "./Avatar";
 
@@ -13,7 +13,7 @@ function formatTime(iso: string | null): string {
 }
 
 export function ChatList() {
-  const { accounts, current, dialogs, loadingChats, chatsError, selectAccount, openDialog, openSettings, openLotus, logout, appUser, setView } = useStore();
+  const { accounts, current, dialogs, loadingChats, chatsError, selectAccount, openDialog, openSettings, logout, appUser, setView } = useStore();
   const [search, setSearch] = useState("");
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
@@ -119,10 +119,6 @@ export function ChatList() {
             <span>Admin</span>
           </button>
         )}
-        <button className="footer-btn" title="Lotus 0.0.1" onClick={openLotus}>
-          <IconStar size={22} />
-          <span>Lotus</span>
-        </button>
         <button className="footer-btn" title="Sozlamalar" onClick={openSettings}>
           <IconSettings size={22} />
           <span>Sozlamalar</span>

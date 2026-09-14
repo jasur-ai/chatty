@@ -100,6 +100,7 @@ function DelegateChat() {
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const recStartRef = useRef(0);
+  const cameraRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (!recording) {
@@ -112,6 +113,17 @@ function DelegateChat() {
       setRecSeconds(Math.floor((Date.now() - recStartRef.current) / 1000));
     }, 500);
     return () => clearInterval(t);
+  }, [recording]);
+
+  useEffect(() => {
+    const v = cameraRef.current;
+    if (recording === "round" && v && streamRef.current) {
+      v.srcObject = streamRef.current;
+      void v.play().catch(() => {});
+    }
+    return () => {
+      if (v) v.srcObject = null;
+    };
   }, [recording]);
 
   useEffect(() => {
@@ -250,12 +262,28 @@ function DelegateChat() {
 
       <footer className="composer">
         {recording && (
-          <div className="rec-banner">
-            <span className="rec-dot" />
-            <span>
-              {recording === "voice" ? "Ovozli xabar" : "Dumaloq video"} yozilmoqda — {Math.floor(recSeconds / 60)}:{String(recSeconds % 60).padStart(2, "0")}
-            </span>
-            <button className="btn danger" onClick={stopRecording}>To'xtatish va yuborish</button>
+          <div className="rec-panel">
+            {recording === "round" ? (
+              <video ref={cameraRef} className="rec-camera" autoPlay playsInline muted />
+            ) : (
+              <div className="rec-wave">
+                {Array.from({ length: 28 }).map((_, i) => (
+                  <span
+                    key={i}
+                    className="wave-bar"
+                    style={{ animationDelay: `${(i % 7) * 0.09}s`, height: `${30 + ((i * 13) % 55)}%` }}
+                  />
+                ))}
+              </div>
+            )}
+            <div className="rec-info">
+              <span className="rec-label">
+                <span className="rec-dot" />
+                <span>{recording === "voice" ? "Ovozli xabar" : "Dumaloq video"} yozilmoqda</span>
+              </span>
+              <span className="rec-timer muted">{Math.floor(recSeconds / 60)}:{String(recSeconds % 60).padStart(2, "0")}</span>
+              <button className="btn danger" onClick={stopRecording}>To'xtatish va yuborish</button>
+            </div>
           </div>
         )}
         {error && <div className="composer-error">{error}</div>}

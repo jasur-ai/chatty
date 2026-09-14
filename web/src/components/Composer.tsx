@@ -18,6 +18,7 @@ export function Composer() {
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const recStartRef = useRef(0);
+  const cameraRef = useRef<HTMLVideoElement>(null);
 
   // Yozish vaqti hisoblagichi
   useEffect(() => {
@@ -31,6 +32,18 @@ export function Composer() {
       setRecSeconds(Math.floor((Date.now() - recStartRef.current) / 1000));
     }, 500);
     return () => clearInterval(t);
+  }, [recording]);
+
+  // Dumaloq video yozayotganda jonli kamera preview
+  useEffect(() => {
+    const v = cameraRef.current;
+    if (recording === "round" && v && streamRef.current) {
+      v.srcObject = streamRef.current;
+      void v.play().catch(() => {});
+    }
+    return () => {
+      if (v) v.srcObject = null;
+    };
   }, [recording]);
 
   function fmtRec(s: number): string {
@@ -162,12 +175,28 @@ export function Composer() {
         </div>
       )}
       {recording && (
-        <div className="rec-banner">
-          <span className="rec-dot" />
-          <span>
-            {recording === "voice" ? "Ovozli xabar" : "Dumaloq video"} yozilmoqda — {fmtRec(recSeconds)}
-          </span>
-          <button className="btn danger" onClick={stopRecording}>To'xtatish va yuborish</button>
+        <div className="rec-panel">
+          {recording === "round" ? (
+            <video ref={cameraRef} className="rec-camera" autoPlay playsInline muted />
+          ) : (
+            <div className="rec-wave">
+              {Array.from({ length: 28 }).map((_, i) => (
+                <span
+                  key={i}
+                  className="wave-bar"
+                  style={{ animationDelay: `${(i % 7) * 0.09}s`, height: `${30 + ((i * 13) % 55)}%` }}
+                />
+              ))}
+            </div>
+          )}
+          <div className="rec-info">
+            <span className="rec-label">
+              <span className="rec-dot" />
+              <span>{recording === "voice" ? "Ovozli xabar" : "Dumaloq video"} yozilmoqda</span>
+            </span>
+            <span className="rec-timer muted">{fmtRec(recSeconds)}</span>
+            <button className="btn danger" onClick={stopRecording}>To'xtatish va yuborish</button>
+          </div>
         </div>
       )}
       <div className="composer-row">
