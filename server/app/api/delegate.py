@@ -4,6 +4,7 @@ Egasi (owner/admin) begona odamlar @chattiey_bot'ga yozgan suhbatlarni shu yerda
 ko'radi va javob beradi; javob bot nomidan begonaga yetadi.
 """
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
@@ -82,7 +83,7 @@ async def send_message(
             data, _ct = storage.get(body.media_key)
         except Exception:  # noqa: BLE001
             raise HTTPException(status_code=400, detail="Fayl topilmadi") from None
-        ext = _ext_for(body.media_type)
+        ext = Path(body.media_key).suffix or ".bin"
         sent_id = await notifier.send_media_file(
             dlg.bot_chat_id, data, f"media{ext}", body.media_type, text
         )

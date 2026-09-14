@@ -11,6 +11,9 @@ FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 
+# ffmpeg — brauzer yozgan webm'ni Telegram formatiga (ogg/mp4) o'tkazish uchun
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+
 COPY server/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

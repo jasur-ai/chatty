@@ -11,6 +11,7 @@ from sqlalchemy import select, update as sa_update
 from telethon import functions
 
 from ..db import Dialog, Message, SessionLocal
+from .. import convert
 from ..storage import storage
 from ..ws import ws_manager
 from .manager import manager
@@ -289,9 +290,28 @@ async def send_media(
             raise ValueError("Dialog topilmadi")
         entity = await client.get_entity(input_peer(dialog.tg_id, dialog.peer_type))
 
-        # R2'dan temp faylga chiqarib, Telethon orqali yuboramiz
+        # Brauzer webm yozadi — Telegram uchun to'g'ri formatga o'tkazamiz
         ext = Path(media_key).suffix or ".bin"
-        tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+        converted: bytes | None = None
+        send_ext = ext
+        if media_type == "voice":
+            converted = await asyncio.to_thread(convert.to_voice_note, data, ext)
+            if converted:
+                data = converted
+                send_ext = ".ogg"
+        elif media_type == "round":
+            converted = await asyncio.to_thread(convert.to_video_note, data, ext)
+            if converted:
+                data = converted
+                send_ext = ".mp4"
+        elif media_type == "video":
+            converted = await asyncio.to_thread(convert.to_video, data, ext)
+            if converted:
+                data = converted
+                send_ext = ".mp4"
+
+        # R2'dan temp faylga chiqarib, Telethon orqali yuboramiz
+        tmp = tempfile.NamedTemporaryFile(suffix=send_ext, delete=False)
         try:
             tmp.write(data)
             tmp.close()

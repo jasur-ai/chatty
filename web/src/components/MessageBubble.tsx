@@ -16,98 +16,49 @@ function MediaContent({ msg }: { msg: Message }) {
   if (!url) {
     return <div className="media-placeholder"><span>Media</span></div>;
   }
+  // Media elementni doim ko'rsatamiz (display:none video yuklashni to'xtatadi),
+  // ustiga spinner qo'yib, yuklangach yashiramiz.
   switch (msg.media_type) {
     case "photo":
       return (
-        <>
-          {state === "loading" && <div className="media-loading"><IconSpinner size={16} /> Yuklanmoqda…</div>}
-          {state !== "error" && (
-            <img
-              src={url}
-              alt="Rasm"
-              className="media-img"
-              loading="lazy"
-              style={state === "loading" ? { display: "none" } : undefined}
-              onLoad={() => setState("ready")}
-              onError={() => setState("error")}
-            />
-          )}
+        <div className="media-wrap">
+          {state === "loading" && <div className="media-loading"><IconSpinner size={16} /></div>}
+          <img src={url} alt="Rasm" className="media-img" loading="lazy" onLoad={() => setState("ready")} onError={() => setState("error")} />
           {state === "error" && <div className="media-error">Rasm yuklanmadi</div>}
-        </>
+        </div>
       );
     case "video":
       return (
-        <>
-          {state === "loading" && <div className="media-loading"><IconSpinner size={16} /> Yuklanmoqda…</div>}
-          {state !== "error" && (
-            <video
-              src={url}
-              controls
-              className="media-img"
-              preload="auto"
-              style={state === "loading" ? { display: "none" } : undefined}
-              onLoadedData={() => setState("ready")}
-              onError={() => setState("error")}
-            />
-          )}
+        <div className="media-wrap">
+          {state === "loading" && <div className="media-loading"><IconSpinner size={16} /></div>}
+          <video src={url} controls className="media-img" preload="auto" onLoadedData={() => setState("ready")} onError={() => setState("error")} />
           {state === "error" && <div className="media-error">Video yuklanmadi</div>}
-        </>
+        </div>
       );
     case "round":
       return (
-        <>
-          {state === "loading" && <div className="media-loading"><IconSpinner size={16} /> Yuklanmoqda…</div>}
-          {state !== "error" && (
-            <video
-              src={url}
-              controls
-              playsInline
-              className="media-round"
-              preload="auto"
-              style={state === "loading" ? { display: "none" } : undefined}
-              onLoadedData={() => setState("ready")}
-              onError={() => setState("error")}
-            />
-          )}
+        <div className="media-wrap">
+          {state === "loading" && <div className="media-loading"><IconSpinner size={16} /></div>}
+          <video src={url} controls playsInline className="media-round" preload="auto" onLoadedData={() => setState("ready")} onError={() => setState("error")} />
           {state === "error" && <div className="media-error">Video yuklanmadi</div>}
-        </>
+        </div>
       );
     case "voice":
     case "audio":
       return (
-        <>
-          {state === "loading" && <div className="media-loading"><IconSpinner size={16} /> Yuklanmoqda…</div>}
-          {state !== "error" && (
-            <audio
-              src={url}
-              controls
-              className="media-audio"
-              preload="auto"
-              style={state === "loading" ? { display: "none" } : undefined}
-              onLoadedData={() => setState("ready")}
-              onError={() => setState("error")}
-            />
-          )}
+        <div className="media-wrap">
+          {state === "loading" && <div className="media-loading"><IconSpinner size={16} /></div>}
+          <audio src={url} controls className="media-audio" preload="auto" onLoadedData={() => setState("ready")} onError={() => setState("error")} />
           {state === "error" && <div className="media-error">Audio yuklanmadi</div>}
-        </>
+        </div>
       );
     case "gif":
       return (
-        <>
-          {state === "loading" && <div className="media-loading"><IconSpinner size={16} /> Yuklanmoqda…</div>}
-          {state !== "error" && (
-            <img
-              src={url}
-              alt="GIF"
-              className="media-img"
-              loading="lazy"
-              style={state === "loading" ? { display: "none" } : undefined}
-              onLoad={() => setState("ready")}
-              onError={() => setState("error")}
-            />
-          )}
+        <div className="media-wrap">
+          {state === "loading" && <div className="media-loading"><IconSpinner size={16} /></div>}
+          <img src={url} alt="GIF" className="media-img" loading="lazy" onLoad={() => setState("ready")} onError={() => setState("error")} />
           {state === "error" && <div className="media-error">GIF yuklanmadi</div>}
-        </>
+        </div>
       );
     case "file":
     default:
@@ -123,16 +74,13 @@ function MediaContent({ msg }: { msg: Message }) {
 const REACTIONS = ["👍", "❤️", "🔥", "😮", "😢", "🎉"];
 
 export function MessageBubble({ msg }: { msg: Message }) {
-  const { current, token, activeDialog, appUser, setReplyTo } = useStore();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const { current, token, activeDialog, setReplyTo } = useStore();
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState("");
   const [reacting, setReacting] = useState(false);
   const hasMedia = msg.media_type !== "none";
-  const isVip = !!appUser?.is_vip || !!appUser?.is_owner || !!appUser?.is_admin;
 
   async function act(fn: () => Promise<unknown>) {
-    setMenuOpen(false);
     try {
       await fn();
     } catch (e) {
@@ -173,37 +121,40 @@ export function MessageBubble({ msg }: { msg: Message }) {
 
       <div className="msg-actions">
         <button className="mini-btn" title="Javob berish" onClick={() => setReplyTo(msg)}>
-          <IconReply size={15} />
+          <IconReply size={16} />
         </button>
-        {isVip && !editing && (
+        {!editing && (
           <>
-            <button className="mini-btn" title="Harakatlar" onClick={() => setMenuOpen((v) => !v)}>
-              <IconStar size={14} />
-            </button>
-            {menuOpen && (
-              <div className="msg-menu">
-                {msg.out && (
-                  <button onClick={() => { setEditing(true); setEditText(msg.text); setMenuOpen(false); }}>
-                    <IconEdit size={15} /> Tahrirlash
-                  </button>
-                )}
-                {msg.out && (
-                  <button onClick={() => act(() => api.vipDelete(current!.id, activeDialog!.id, msg.tg_id, token!))}>
-                    <IconTrash size={15} /> O'chirish
-                  </button>
-                )}
-                <button onClick={() => { setReacting((v) => !v); setMenuOpen(false); }}>
-                  <IconStar size={15} /> Reaksiya
-                </button>
-                <button
-                  onClick={() =>
-                    act(() => api.vipStar(current!.id, { dialog_id: activeDialog!.id, tg_id: msg.tg_id, text: msg.text, dialog_title: activeDialog!.title }, token!))
-                  }
-                >
-                  <IconStar size={15} /> Yulduzcha
-                </button>
-              </div>
+            {msg.out && (
+              <button className="mini-btn" title="Tahrirlash" onClick={() => { setEditing(true); setEditText(msg.text); }}>
+                <IconEdit size={16} />
+              </button>
             )}
+            {msg.out && (
+              <button
+                className="mini-btn"
+                title="O'chirish"
+                onClick={() => {
+                  if (window.confirm("Xabarni o'chirish?")) {
+                    void act(() => api.vipDelete(current!.id, activeDialog!.id, msg.tg_id, token!));
+                  }
+                }}
+              >
+                <IconTrash size={16} />
+              </button>
+            )}
+            <button className="mini-btn" title="Reaksiya" onClick={() => setReacting((v) => !v)}>
+              <IconStar size={15} />
+            </button>
+            <button
+              className="mini-btn"
+              title="Yulduzcha (belgilash)"
+              onClick={() =>
+                void act(() => api.vipStar(current!.id, { dialog_id: activeDialog!.id, tg_id: msg.tg_id, text: msg.text, dialog_title: activeDialog!.title }, token!))
+              }
+            >
+              <IconStar size={15} />
+            </button>
             {reacting && (
               <div className="reaction-bar">
                 {REACTIONS.map((r) => (

@@ -10,6 +10,7 @@ Ikki vazifa:
 import asyncio
 import json
 import logging
+from pathlib import Path
 
 import httpx
 
@@ -162,6 +163,23 @@ class BotNotifier:
         self, chat_id: int, data: bytes, filename: str, media_type: str, caption: str = ""
     ) -> int | None:
         """Begonaga raw fayl yuboradi (multipart orqali — file_id shart emas)."""
+        from . import convert as _convert
+
+        # webm → Telegram formati (ogg/mp4) — aks holda "fayl" bo'lib ketadi
+        ext = Path(filename).suffix or ".bin"
+        if media_type == "voice":
+            c = await asyncio.to_thread(_convert.to_voice_note, data, ext)
+            if c:
+                data, filename = c, filename.rsplit(".", 1)[0] + ".ogg"
+        elif media_type == "round":
+            c = await asyncio.to_thread(_convert.to_video_note, data, ext)
+            if c:
+                data, filename = c, filename.rsplit(".", 1)[0] + ".mp4"
+        elif media_type == "video":
+            c = await asyncio.to_thread(_convert.to_video, data, ext)
+            if c:
+                data, filename = c, filename.rsplit(".", 1)[0] + ".mp4"
+
         method, field = {
             "photo": ("sendPhoto", "photo"),
             "voice": ("sendVoice", "voice"),
@@ -173,7 +191,7 @@ class BotNotifier:
         if not self.enabled:
             return None
         try:
-            async with httpx.AsyncClient(timeout=60) as c:
+            async with httpx.AsyncClient(timeout=120) as c:
                 files = {field: (filename, data, "application/octet-stream")}
                 payload: dict = {"chat_id": str(chat_id)}
                 if caption:

@@ -1900,14 +1900,20 @@ textarea {
 }
 
 /* Video/media yuklanayotgan holat */
+.media-wrap {
+  position: relative;
+}
+
 .media-loading {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 28px 20px;
+  background: var(--hover);
   color: var(--text-secondary);
-  font-size: 13px;
+  z-index: 2;
+  pointer-events: none;
 }
 
 .media-error {
