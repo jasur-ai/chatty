@@ -10,7 +10,8 @@ from sqlalchemy import select
 from ..db import AppUser, Dialog, Message, SessionLocal, get_session
 from ..storage import storage
 from ..tg import actions
-from ..tg.sync import media_type_from_content_type
+from ..tg.manager import manager
+from ..tg.sync import input_peer, media_type_from_content_type
 from .deps import require_account, resolve_account_id
 
 router = APIRouter(prefix="/api", tags=["chats"])
@@ -128,13 +129,67 @@ async def upload_media(
     }
 
 
+@router.get("/dialog/photo/{account_id}/{dialog_id}")
+async def dialog_photo(account_id: int, dialog_id: int):
+    """Profil rasmini talab bo'lganda yuklab beradi (on-demand).
+
+    Rasm keshda bo'lsa darhol beradi; yo'qolgan bo'lsa Telegram'dan qayta yuklaydi.
+    <img> tegi Authorization sarlavhasini yubora olmagani uchun auth talab qilinmaydi.
+    """
+    import io as _io
+
+    async with SessionLocal() as db:
+        dialog = (
+            await db.execute(
+                select(Dialog).where(Dialog.id == dialog_id, Dialog.account_id == account_id)
+            )
+        ).scalar_one_or_none()
+        if dialog is None:
+            raise HTTPException(status_code=404, detail="Dialog topilmadi")
+
+        # Keshda bo'lsa — darhol beramiz
+        if dialog.photo_key and storage.exists(dialog.photo_key):
+            try:
+                data, ct = storage.get(dialog.photo_key)
+                return Response(content=data, media_type=ct)
+            except Exception:  # noqa: BLE001
+                pass
+
+        # Rasm yo'q (photo_key None) — hech qachon yuklanmagan va entity'da ham rasm yo'q
+        if dialog.photo_key is None:
+            raise HTTPException(status_code=404, detail="Profil rasmi yo'q")
+
+        # Rasm bor, lekin fayl yo'qolgan — Telegram'dan qayta yuklaymiz
+        client = manager.get(account_id)
+        if client is None:
+            raise HTTPException(status_code=503, detail="Akkaunt ulangan emas")
+        try:
+            entity = await asyncio.wait_for(
+                client.get_entity(input_peer(dialog.tg_id, dialog.peer_type)), timeout=15.0
+            )
+            data = await asyncio.wait_for(
+                client.download_profile_photo(entity, file=_io.BytesIO(), download_big=False),
+                timeout=10.0,
+            )
+            if data is None:
+                raise HTTPException(status_code=404, detail="Profil rasmi topilmadi")
+            content = data.getvalue() if isinstance(data, _io.BytesIO) else bytes(data)
+            if not content:
+                raise HTTPException(status_code=404, detail="Profil rasmi topilmadi")
+            key = storage.put(content, "image/jpeg", ".jpg")
+            dialog.photo_key = key
+            await db.commit()
+            return Response(content=content, media_type="image/jpeg")
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            logging.getLogger("chatty").warning("Profil rasmi yuklanmadi: %s", exc)
+            raise HTTPException(status_code=502, detail="Profil rasmi yuklanmadi") from exc
+
+
 @router.get("/media/fetch/{account_id}/{dialog_id}/{tg_id}")
 async def fetch_media(account_id: int, dialog_id: int, tg_id: int):
-    """Media'ni talab bo'lganda yuklab beradi (on-demand).
-
-    Xabar yuklanganda media fonda emas, shu endpoint orqali yuklanadi —
-    bir xil Telethon client'ni bloklamaydi va rasm/ovoz/video darhol ko'rinadi.
-    """
+    """Media'ni talab bo'lganda yuklab beradi (on-demand)."""
     from ..tg.manager import manager as _mgr
     from ..tg.sync import _process_media, input_peer
 

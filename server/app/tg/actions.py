@@ -36,6 +36,41 @@ async def _require_client(account_id: int):
     return client
 
 
+_photo_flag_backfilled: set[int] = set()
+
+
+async def backfill_dialog_photo_flags(account_id: int) -> None:
+    """Dialoglar uchun 'rasm bor' belgisini (sentinel photo_key="") fonda o'rnatadi.
+
+    Bir marta (har bir akkaunt uchun) ishga tushadi — iter_dialogs orqali entity'larni
+    olib, faqat rasm bor-yo'qligini yozadi (hech narsa yuklamaydi). Bu profil rasmlari
+    on-demand yuklanishi uchun kerak.
+    """
+    if account_id in _photo_flag_backfilled:
+        return
+    _photo_flag_backfilled.add(account_id)
+    client = manager.get(account_id)
+    if client is None:
+        return
+    try:
+        async with SessionLocal() as db:
+            async for d in client.iter_dialogs(limit=None):
+                entity = d.entity
+                has_photo = getattr(entity, "photo", None) is not None
+                if not has_photo:
+                    continue
+                row = (
+                    await db.execute(
+                        select(Dialog).where(Dialog.account_id == account_id, Dialog.tg_id == entity.id)
+                    )
+                ).scalar_one_or_none()
+                if row is not None and row.photo_key is None:
+                    row.photo_key = ""
+            await db.commit()
+    except Exception as e:  # noqa: BLE001
+        log.warning("Profil rasm belgilarini backfill qilishda xato: %s", e)
+
+
 _avatar_backfilling = False
 
 

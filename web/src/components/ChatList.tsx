@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { resolveUrl } from "../env";
-import { IconBot, IconLogout, IconMenu, IconPlus, IconSearch, IconSettings, IconShield } from "../icons";
+import { IconBot, IconLogout, IconMenu, IconSearch, IconSettings, IconShield } from "../icons";
 import { useStore } from "../store";
 import { Avatar } from "./Avatar";
 
@@ -31,9 +31,7 @@ export function ChatList() {
             <IconMenu size={22} />
           </button>
           <span className="sidebar-title">{current?.bot_name || current?.first_name || "Chatty"}</span>
-          <button className="icon-btn" title="Yangi chat">
-            <IconPlus size={22} />
-          </button>
+          <span className="tg-close-spacer" />
         </div>
         {switcherOpen && (
           <div className="switcher">

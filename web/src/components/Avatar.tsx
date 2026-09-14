@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 const COLORS = [
   "#e17076",
   "#7bc862",
@@ -15,24 +17,31 @@ function colorFor(name: string): string {
   return COLORS[h % COLORS.length];
 }
 
+function initialsOf(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join("");
+}
+
 export function Avatar({ name, photo, size = 54 }: { name: string; photo?: string | null; size?: number }) {
-  if (photo) {
+  const [failed, setFailed] = useState(false);
+
+  if (photo && !failed) {
     return (
       <img
         src={photo}
         alt={name}
         width={size}
         height={size}
+        onError={() => setFailed(true)}
         style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
       />
     );
   }
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0].toUpperCase())
-    .join("");
+  const initials = initialsOf(name);
   return (
     <div
       style={{

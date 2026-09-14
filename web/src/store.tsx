@@ -209,7 +209,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setLoadingMessages(true);
       try {
         const res = await api.messages(current.id, d.id, token);
-        setMessages(res.messages);
+        // Backend eng yangi xabarni birinchi qaytaradi — Telegram kabi eskidan yangiga tartiblaymiz.
+        setMessages([...res.messages].reverse());
         hasMoreRef.current = res.has_more;
         void api.read(current.id, d.id, token).then(() => {
           setMessages((prev) => prev.map((m) => (m.out ? m : { ...m, read: true })));
@@ -279,7 +280,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setLoadingMessages(true);
     try {
       const res = await api.messages(current.id, activeDialog.id, token, oldest.tg_id);
-      setMessages((prev) => [...res.messages, ...prev]);
+      setMessages((prev) => [...[...res.messages].reverse(), ...prev]);
       hasMoreRef.current = res.has_more;
     } catch {
       /* ignore */
@@ -348,7 +349,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setDelegateMessagesLoading(true);
       try {
         const res = await api.delegateMessages(d.id, t);
-        setDelegateMessages(res.messages);
+        setDelegateMessages([...res.messages].reverse());
         void api.delegateRead(d.id, t).then(() => {
           setDelegateDialogs((prev) => prev.map((x) => (x.id === d.id ? { ...x, unread_count: 0 } : x)));
         });

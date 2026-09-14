@@ -288,7 +288,7 @@ textarea {
 }
 
 .sidebar-header {
-  padding: 8px 10px 6px;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) 10px 6px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -300,6 +300,12 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+/* Telegram Mini App'ning o'ng-yuqoridagi yopish tugmasi uchun bo'sh joy */
+.tg-close-spacer {
+  width: 44px;
+  flex-shrink: 0;
 }
 
 .sidebar-title {
@@ -521,7 +527,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 14px;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 8px;
   background: var(--header-bg);
   border-bottom: 1px solid var(--divider);
 }
@@ -1763,3 +1769,36 @@ textarea {
 .report-body { margin-top: 6px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
 
 .small { font-size: 12px; }
+
+/* ================= UI tuzatishlar ================= */
+.bubble-row.in {
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.bubble-row.in .bubble {
+  border-bottom-left-radius: 3px;
+}
+
+.file-pick {
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.file-pick-btn {
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  width: 100%;
+  justify-content: flex-start;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.file-pick-btn:hover {
+  background: var(--hover);
+}
+
+.music-item-body .muted {
+  font-size: 13px;
+}

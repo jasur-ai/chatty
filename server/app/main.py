@@ -30,6 +30,8 @@ async def lifespan(app: FastAPI):
     # Telegram akkauntlarini fonda ulaymiz — server so'rovlarga darhol javob bera boshlaydi
     # (cold start'da Telegram qayta ulanishi bir necha soniya olishi mumkin).
     asyncio.create_task(manager.start_all())
+    # Profil rasmlari on-demand yuklanishi uchun "rasm bor" belgilarini fonda o'rnatamiz.
+    asyncio.create_task(_backfill_photo_flags())
     await notifier.start_polling()
     await scheduler.start()
     log.info("Chatty server ishga tushdi")
@@ -37,6 +39,22 @@ async def lifespan(app: FastAPI):
     await scheduler.stop()
     await notifier.stop()
     await manager.shutdown()
+
+
+async def _backfill_photo_flags() -> None:
+    """Server ishga tushgach, ulangan akkauntlar uchun profil rasm belgilarini fonda o'rnatadi."""
+    from .tg.actions import backfill_dialog_photo_flags
+
+    await asyncio.sleep(8)  # akkauntlar ulanishini kutamiz
+    from .db import Account, SessionLocal
+    from sqlalchemy import select
+
+    async with SessionLocal() as db:
+        rows = (
+            await db.execute(select(Account).where(Account.auth_step == "ready", Account.is_active.is_(True)))
+        ).scalars().all()
+    for acc in rows:
+        asyncio.create_task(backfill_dialog_photo_flags(acc.id))
 
 
 app = FastAPI(title="Chatty", version="0.1.0", lifespan=lifespan)

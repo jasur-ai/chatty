@@ -143,6 +143,7 @@ async def upsert_dialog(db, account_id: int, entity, *, unread_count: int = 0) -
     ).scalar_one_or_none()
     title = getattr(entity, "title", None) or getattr(entity, "first_name", "") or ""
     username = getattr(entity, "username", None)
+    has_photo = getattr(entity, "photo", None) is not None
     if row is None:
         row = Dialog(
             account_id=account_id,
@@ -151,6 +152,8 @@ async def upsert_dialog(db, account_id: int, entity, *, unread_count: int = 0) -
             title=title,
             username=username,
             unread_count=unread_count,
+            # rasm bor, lekin hali yuklanmagan — sentinel "" (on-demand yuklanadi)
+            photo_key="" if has_photo else None,
         )
         db.add(row)
     else:
@@ -158,6 +161,8 @@ async def upsert_dialog(db, account_id: int, entity, *, unread_count: int = 0) -
         row.username = username
         row.peer_type = peer_type
         row.unread_count = unread_count
+        if has_photo and row.photo_key is None:
+            row.photo_key = ""
     await db.flush()
     return row
 
@@ -246,9 +251,8 @@ async def update_dialog_last(db, dialog: Dialog, msg, out: bool) -> None:
 
 # ---------------- serialization ----------------
 def serialize_dialog(d: Dialog) -> dict:
-    photo = None
-    if d.photo_key and storage.exists(d.photo_key):
-        photo = storage.url(d.photo_key)
+    # photo_key None = rasm yo'q; "" (sentinel) yoki haqiqiy key = rasm bor → on-demand
+    photo = f"/api/dialog/photo/{d.account_id}/{d.id}" if d.photo_key is not None else None
     return {
         "id": d.id,
         "tg_id": d.tg_id,

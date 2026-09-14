@@ -164,10 +164,11 @@ function UsersTab({
 
 function MusicTab() {
   const { token, current } = useStore();
-  const [posts, setPosts] = useState<{ id: number; title: string; performer: string | null; caption: string; reactions: unknown[] }[]>([]);
+  const [posts, setPosts] = useState<{ id: number; title: string; performer: string | null; caption: string; media_url: string | null; reactions: unknown[] }[]>([]);
   const [title, setTitle] = useState("");
   const [performer, setPerformer] = useState("");
   const [caption, setCaption] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -194,10 +195,20 @@ function MusicTab() {
     setSaving(true);
     setMsg("");
     try {
-      await api.createMusic(current.id, { title: title.trim(), performer: performer.trim() || undefined, caption }, token);
+      let mediaKey: string | undefined;
+      if (file) {
+        const up = await api.uploadMedia(current.id, file, token);
+        mediaKey = up.media_key;
+      }
+      await api.createMusic(
+        current.id,
+        { title: title.trim(), performer: performer.trim() || undefined, caption, media_key: mediaKey },
+        token,
+      );
       setTitle("");
       setPerformer("");
       setCaption("");
+      setFile(null);
       setMsg("Musiqa qo'shildi");
       await load();
     } catch (e) {
@@ -211,9 +222,20 @@ function MusicTab() {
     <div className="music-admin">
       <div className="pane">
         <div className="pane-title">Yangi musiqa qo'shish</div>
-        <input className="input" placeholder="Nomi (masalan: Qo'shiq nomi)" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <input className="input" placeholder="Musiqa nomi" value={title} onChange={(e) => setTitle(e.target.value)} />
         <input className="input" placeholder="Ijrochi (ixtiyoriy)" value={performer} onChange={(e) => setPerformer(e.target.value)} />
         <input className="input" placeholder="Izoh (ixtiyoriy)" value={caption} onChange={(e) => setCaption(e.target.value)} />
+        <label className="file-pick">
+          <input
+            type="file"
+            accept="audio/*"
+            style={{ display: "none" }}
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+          <span className="btn ghost file-pick-btn">
+            <IconMusic size={18} /> {file ? file.name : "Audio fayl tanlash"}
+          </span>
+        </label>
         <button className="btn primary" disabled={!title.trim() || saving} onClick={() => void submit()}>
           {saving ? <IconSpinner size={18} /> : <IconPlus size={18} />} Qo'shish
         </button>

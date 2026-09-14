@@ -214,7 +214,7 @@ export const api = {
   musicList: (accountId: number, token: string) =>
     req<{ music: MusicPost[] }>(`/api/bot/music?account_id=${accountId}`, {}, token),
 
-  createMusic: (accountId: number, body: { title: string; performer?: string; caption?: string }, token: string) =>
+  createMusic: (accountId: number, body: { title: string; performer?: string; caption?: string; media_key?: string }, token: string) =>
     req<{ id: number }>("/api/bot/music", { method: "POST", body: JSON.stringify({ account_id: accountId, ...body }) }, token),
 
   reactMusic: (body: { music_post_id: number; reaction: string; user_tg_id: number; comment?: string }, token: string) =>

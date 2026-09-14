@@ -141,6 +141,9 @@ function DelegateChat() {
         )}
         {delegateMessages.map((m) => (
           <div key={m.id} className={`bubble-row ${m.direction === "out" ? "out" : "in"}`}>
+            {m.direction === "in" && (
+              <Avatar name={name} size={34} />
+            )}
             <div className={`bubble ${m.direction === "out" ? "out" : "in"}`}>
               {m.media_url && m.media_type === "photo" && (
                 <img className="bubble-media" src={resolveUrl(m.media_url)} alt="rasm" />
