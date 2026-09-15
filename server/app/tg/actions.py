@@ -145,12 +145,19 @@ async def backfill_kinds(account_id: int) -> None:
                     entity = await asyncio.wait_for(
                         client.get_entity(input_peer(d.tg_id, d.peer_type)), timeout=15.0
                     )
-                except Exception:  # noqa: BLE001
+                except Exception as e:  # noqa: BLE001
+                    # Telegram vaqtincha cheklasa (FLOOD_WAIT) — keyingi safar davom etamiz
+                    if "wait" in str(e).lower():
+                        _kinds_backfilled.discard(account_id)
+                        return
                     continue
                 d.kind = kind_of(entity)
+                await db.commit()
+                await asyncio.sleep(0.05)  # Telegram'ni ortiqcha bezovta qilmaymiz
             await db.commit()
     except Exception as e:  # noqa: BLE001
         log.warning("Dialog bo'limlarini aniqlashda xato: %s", e)
+        _kinds_backfilled.discard(account_id)
 
 
 async def sync_dialogs(account_id: int, limit: int = 200, force: bool = False) -> list[dict]:
