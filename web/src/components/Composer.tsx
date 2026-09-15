@@ -3,6 +3,27 @@ import { api } from "../api";
 import { IconMic, IconPlus, IconSend, IconSpinner, IconStory, IconX } from "../icons";
 import { useStore } from "../store";
 
+/** Brauzer qo'llab-quvvatlaydigan yozib olish formatini tanlaydi
+ *  (iOS Safari webm o'rniga mp4 ishlatadi — aks holda MediaRecorder xato beradi). */
+function pickMime(kind: "voice" | "round"): string {
+  const candidates =
+    kind === "voice"
+      ? ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"]
+      : ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
+  if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported) {
+    for (const c of candidates) {
+      if (MediaRecorder.isTypeSupported(c)) return c;
+    }
+  }
+  return kind === "voice" ? "audio/webm" : "video/webm";
+}
+
+function extForMime(mime: string): string {
+  if (mime.includes("mp4")) return "mp4";
+  if (mime.includes("ogg")) return "ogg";
+  return "webm";
+}
+
 export function Composer() {
   const { current, token, activeDialog, sendText, dialogs, replyTo, setReplyTo } = useStore();
   const [text, setText] = useState("");
@@ -94,13 +115,13 @@ export function Composer() {
         video: kind === "round",
       });
       streamRef.current = stream;
-      const mime = kind === "voice" ? "audio/webm" : "video/webm";
+      const mime = pickMime(kind);
       const rec = new MediaRecorder(stream, { mimeType: mime });
       chunksRef.current = [];
       rec.ondataavailable = (e) => chunksRef.current.push(e.data);
       rec.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: mime });
-        const ext = kind === "voice" ? "webm" : "webm";
+        const ext = extForMime(mime);
         const file = new File([blob], `${kind}-${Date.now()}.${ext}`, { type: mime });
         setUploading(true);
         try {
@@ -118,6 +139,12 @@ export function Composer() {
       rec.start();
       mediaRecorderRef.current = rec;
       setRecording(kind);
+      // Telegram dumaloq video uchun 60 soniya limit — avtomatik to'xtatamiz
+      if (kind === "round") {
+        window.setTimeout(() => {
+          if (mediaRecorderRef.current === rec && rec.state !== "inactive") stopRecording();
+        }, 60000);
+      }
     } catch (err) {
       setError("Mikrofon/kamera ruxsati yo'q");
     }

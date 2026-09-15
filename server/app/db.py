@@ -56,6 +56,8 @@ class Dialog(Base):
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
     tg_id: Mapped[int] = mapped_column(BigInteger)
     peer_type: Mapped[str] = mapped_column(String(12), default="user")  # user|chat|channel
+    # Bo'lim: bot|user|group|channel (ChatList'dagi "Botlar/Chatlar/Guruhlar/Kanallar")
+    kind: Mapped[str | None] = mapped_column(String(12), nullable=True)
     title: Mapped[str] = mapped_column(String(255), default="")
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     photo_key: Mapped[str | None] = mapped_column(String(512), nullable=True)  # R2 key
@@ -320,6 +322,27 @@ class DelegateMessage(Base):
     date: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class BotReplyCtx(Base):
+    """Bot ichida javob berish uchun kontekst.
+
+    Push-xabarnoma (yoki begona xabari) bot chatida yuborilganda uning
+    message_id'si shu yerda saqlanadi. Egasi shu xabarga reply yozsa,
+    javob aynan shu dialogga (MTProto orqali) yetkaziladi — saytga
+    yo'naltirmasdan, to'g'ridan-to'g'ri Telegram ichida.
+    """
+
+    __tablename__ = "bot_reply_ctx"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    bot_message_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    scope: Mapped[str] = mapped_column(String(12), default="chat")  # chat|delegate
+    account_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # chat uchun
+    dialog_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # chat uchun
+    msg_tg_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # reply_to uchun
+    delegate_dialog_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # delegate uchun
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Admin(Base):
     """Adminlar ro'yxati (owner tomonidan qo'shiladi). tg_user_id bo'yicha."""
 
@@ -332,18 +355,19 @@ class Admin(Base):
 
 
 def _migrate(conn) -> None:
-    """Yengil migratsiya: mavjud jadvalga yangi ustunlarni qo'shish (SQLite, sinxron)."""
+    """Yengil migratsiya: mavjud jadvalga yangi ustunlarni qo'shish.
+
+    SQLite (dev) va Postgres (Neon) ikkalasida ham ishlaydi —
+    SQLAlchemy inspector orqali ustunlar tekshiriladi.
+    """
     import sqlalchemy as sa  # noqa: PLC0415
 
+    insp = sa.inspect(conn)
+    tables = set(insp.get_table_names())
+
     def _cols(table: str) -> set[str]:
-        rows = conn.execute(sa.text(f"PRAGMA table_info({table})")).fetchall()
-        return {r[1] for r in rows}
+        return {c["name"] for c in insp.get_columns(table)}
 
-    def _tables() -> set[str]:
-        rows = conn.execute(sa.text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()
-        return {r[0] for r in rows}
-
-    tables = _tables()
     if "app_users" in tables:
         cols = _cols("app_users")
         if "auto_reply_from" not in cols:
@@ -354,16 +378,17 @@ def _migrate(conn) -> None:
         cols = _cols("dialogs")
         if "archived" not in cols:
             conn.execute(sa.text("ALTER TABLE dialogs ADD COLUMN archived BOOLEAN DEFAULT 0"))
+        if "kind" not in cols:
+            conn.execute(sa.text("ALTER TABLE dialogs ADD COLUMN kind VARCHAR(12)"))
 
 
 async def init_db() -> None:
     async with engine.begin() as conn:
-        # SQLite uchun migratsiya (yangi ustunlar)
-        if settings.database_url.startswith("sqlite"):
-            try:
-                await conn.run_sync(_migrate)
-            except Exception:
-                pass  # yangi DB bo'lsa jadval hali yo'q — create_all yaratadi
+        # Yangi ustunlar (mavjud DB'da create_all ularni qo'shmaydi)
+        try:
+            await conn.run_sync(_migrate)
+        except Exception:
+            pass  # yangi DB bo'lsa jadval hali yo'q — create_all yaratadi
         await conn.run_sync(Base.metadata.create_all)
 
 

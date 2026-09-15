@@ -189,6 +189,9 @@ export const api = {
         }),
       },
       token,
+      // Media yuborish serverda konvertatsiya (webm → ogg/mp4) + Telegram'ga
+      // yuklash bilan boradi — bu 20 soniyadan uzoq davom etishi mumkin.
+      opts?.mediaKey ? 180000 : 30000,
     ),
 
   uploadMedia: (accountId: number, file: File, token: string) => {
@@ -274,6 +277,8 @@ export const api = {
       `/api/delegate/dialogs/${dialogId}/send`,
       { method: "POST", body: JSON.stringify(body) },
       token,
+      // Media bo'lsa serverda konvertatsiya (webm → ogg/mp4) bo'lishi mumkin
+      body.media_key || body.file_id ? 180000 : 30000,
     ),
 
   delegateRead: (dialogId: number, token: string) =>

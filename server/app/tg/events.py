@@ -6,7 +6,6 @@ from types import SimpleNamespace
 from sqlalchemy import select, update as sa_update
 from telethon import events
 
-from ..config import settings
 from ..db import Account, AppUser, AutoForwardRule, Dialog, Message, SessionLocal
 from ..notify import media_brief, notifier
 from ..security import decrypt_session
@@ -80,18 +79,34 @@ async def on_new_message(event: events.NewMessage.Event, account_id: int) -> Non
                 owner_chat_id = app_user.tg_user_id if app_user else None
                 if owner_chat_id:
                     brief = media_brief(msg)
-                    notif_text = (
-                        brief
-                        or (msg.message or "")[:200]
-                        or "Yangi xabar"
-                    )
-                    asyncio.create_task(
-                        notifier.send_notification(
-                            owner_chat_id,
-                            notif_text,
-                            button_url=settings.bot_reply_url or None,
-                        )
-                    )
+                    body = brief or (msg.message or "")[:200] or "Yangi xabar"
+                    notif_text = f"Yangi xabar — {dialog.title or 'Chat'}\n{body}"
+                    # Javob bevosita bot ichida yoziladi (saytga yo'naltirmaymiz):
+                    # shu xabarga reply yozilsa, javob shu chatga boradi.
+                    asyncio.create_task(_push_notification(owner_chat_id, notif_text, account_id, dialog.id, msg.id))
+
+
+async def _push_notification(
+    owner_chat_id: int, text: str, account_id: int, dialog_id: int, msg_tg_id: int | None
+) -> None:
+    """Xabarnoma yuboradi va javob kontekstini saqlaydi (bot ichida reply)."""
+    try:
+        message_id = await notifier.send_notification(
+            owner_chat_id,
+            text,
+            force_reply=True,
+            placeholder="Javobingizni yozing…",
+        )
+        if message_id:
+            await notifier.save_reply_ctx(
+                message_id,
+                scope="chat",
+                account_id=account_id,
+                dialog_id=dialog_id,
+                msg_tg_id=msg_tg_id,
+            )
+    except Exception as e:  # noqa: BLE001
+        log.warning("Push-xabarnoma yuborishda xato: %s", e)
 
 
 async def _apply_auto_forward(client, account_id: int, chat, msg) -> None:

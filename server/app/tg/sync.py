@@ -127,6 +127,23 @@ def peer_type_of(entity) -> str:
     return "user"
 
 
+def kind_of(entity) -> str:
+    """Dialog bo'limi: bot | user | group | channel.
+
+    ChatList'dagi "Botlar / Chatlar / Guruhlar / Kanallar" bo'limlari shu qiymat
+    bo'yicha ajratiladi.
+    """
+    if isinstance(entity, User):
+        return "bot" if getattr(entity, "bot", False) else "user"
+    if isinstance(entity, Channel):
+        if getattr(entity, "megagroup", False) or getattr(entity, "gigagroup", False):
+            return "group"
+        return "channel"
+    if isinstance(entity, Chat):
+        return "group"
+    return "user"
+
+
 def input_peer(tg_id: int, peer_type: str):
     if peer_type == "user":
         return PeerUser(tg_id)
@@ -152,6 +169,7 @@ async def upsert_dialog(db, account_id: int, entity, *, unread_count: int = 0) -
             account_id=account_id,
             tg_id=tg_id,
             peer_type=peer_type,
+            kind=kind_of(entity),
             title=title,
             username=username,
             unread_count=unread_count,
@@ -163,6 +181,7 @@ async def upsert_dialog(db, account_id: int, entity, *, unread_count: int = 0) -
         row.title = title
         row.username = username
         row.peer_type = peer_type
+        row.kind = kind_of(entity)
         row.unread_count = unread_count
         if has_photo and row.photo_key is None:
             row.photo_key = ""
@@ -260,6 +279,8 @@ def serialize_dialog(d: Dialog) -> dict:
         "id": d.id,
         "tg_id": d.tg_id,
         "type": d.peer_type,
+        # bot|user|group|channel — bo'limlar uchun (eski dialoglarda None bo'lishi mumkin)
+        "kind": d.kind or ("group" if d.peer_type == "chat" else "user"),
         "title": d.title,
         "username": d.username,
         "unread_count": d.unread_count,

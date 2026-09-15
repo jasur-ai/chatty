@@ -17,10 +17,14 @@ export interface AppUserInfo {
   theme: string;
 }
 
+export type DialogKind = "user" | "bot" | "group" | "channel";
+
 export interface Dialog {
   id: number;
   tg_id: number;
   type: "user" | "chat" | "channel";
+  /** Bo'lim: bot | user | group | channel */
+  kind: DialogKind;
   title: string;
   username: string | null;
   unread_count: number;

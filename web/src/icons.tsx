@@ -238,3 +238,18 @@ export const IconSpinner = (p: IconProps) => (
     <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
   </svg>
 );
+export const IconArrowDown = (p: IconProps) =>
+  base(p, (
+    <>
+      <path d="M12 5v14" />
+      <path d="M19 12l-7 7-7-7" />
+    </>
+  ));
+
+export const IconMegaphone = (p: IconProps) =>
+  base(p, (
+    <>
+      <path d="M3 11v2a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z" />
+      <path d="M14 8a5 5 0 0 1 0 8" />
+    </>
+  ));

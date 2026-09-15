@@ -10,6 +10,7 @@ Ikki vazifa:
 import asyncio
 import json
 import logging
+from datetime import timedelta
 from pathlib import Path
 
 import httpx
@@ -109,17 +110,43 @@ class BotNotifier:
             return None
 
     async def send_notification(
-        self, chat_id: int, text: str, *, button_url: str | None = None, button_text: str = "Javob yozish"
-    ) -> bool:
+        self,
+        chat_id: int,
+        text: str,
+        *,
+        button_url: str | None = None,
+        button_text: str = "Javob yozish",
+        force_reply: bool = False,
+        placeholder: str = "Shu yerga javob yozing…",
+        reply_to_message_id: int | None = None,
+        parse_html: bool = False,
+    ) -> int | None:
+        """Xabarnoma yuboradi. `force_reply=True` bo'lsa javob oynasi shu xabar ostida ochiladi.
+
+        message_id qaytaradi — bot ichida javob berish kontekstini bog'lash uchun.
+        """
         if not self.enabled:
-            return False
+            return None
         payload: dict = {"chat_id": chat_id, "text": text}
-        if button_url:
+        if parse_html:
+            payload["parse_mode"] = "HTML"
+        if reply_to_message_id:
+            payload["reply_to_message_id"] = reply_to_message_id
+        if force_reply:
+            # Saytga yo'naltirmasdan — to'g'ridan-to'g'ri Telegram ichida javob
+            payload["reply_markup"] = {
+                "force_reply": True,
+                "selective": True,
+                "input_field_placeholder": placeholder,
+            }
+        elif button_url:
             payload["reply_markup"] = {
                 "inline_keyboard": [[{"text": button_text, "url": button_url}]]
             }
         data = await self._post("sendMessage", payload)
-        return bool(data and data.get("ok"))
+        if data and data.get("ok"):
+            return data["result"]["message_id"]
+        return None
 
     async def send_text(self, chat_id: int, text: str) -> int | None:
         """Matn yuboradi va yangi message_id qaytaradi."""
@@ -165,20 +192,29 @@ class BotNotifier:
         """Begonaga raw fayl yuboradi (multipart orqali — file_id shart emas)."""
         from . import convert as _convert
 
-        # webm → Telegram formati (ogg/mp4) — aks holda "fayl" bo'lib ketadi
+        # webm → Telegram formati (ogg/mp4) — aks holda "fayl" bo'lib ketadi.
+        # Konvertatsiya bo'lmasa hech bo'lmaganda fayl sifatida yetkazib beramiz.
         ext = Path(filename).suffix or ".bin"
+        stem = filename.rsplit(".", 1)[0] if "." in filename else filename
+        mime = _mime_for(media_type)
         if media_type == "voice":
             c = await asyncio.to_thread(_convert.to_voice_note, data, ext)
             if c:
-                data, filename = c, filename.rsplit(".", 1)[0] + ".ogg"
+                data, filename, mime = c, stem + ".ogg", "audio/ogg"
+            else:
+                media_type = "file"
         elif media_type == "round":
             c = await asyncio.to_thread(_convert.to_video_note, data, ext)
             if c:
-                data, filename = c, filename.rsplit(".", 1)[0] + ".mp4"
-        elif media_type == "video":
+                data, filename, mime = c, stem + ".mp4", "video/mp4"
+            else:
+                media_type = "file"
+        elif media_type == "video" and ext.lower() != ".mp4":
             c = await asyncio.to_thread(_convert.to_video, data, ext)
             if c:
-                data, filename = c, filename.rsplit(".", 1)[0] + ".mp4"
+                data, filename, mime = c, stem + ".mp4", "video/mp4"
+            else:
+                media_type = "file"
 
         method, field = {
             "photo": ("sendPhoto", "photo"),
@@ -188,11 +224,13 @@ class BotNotifier:
             "round": ("sendVideoNote", "video_note"),
             "file": ("sendDocument", "document"),
         }.get(media_type, ("sendDocument", "document"))
+        if media_type == "file":
+            mime = _mime_for("file")
         if not self.enabled:
             return None
         try:
             async with httpx.AsyncClient(timeout=120) as c:
-                files = {field: (filename, data, "application/octet-stream")}
+                files = {field: (filename, data, mime)}
                 payload: dict = {"chat_id": str(chat_id)}
                 if caption:
                     payload["caption"] = caption
@@ -239,6 +277,9 @@ class BotNotifier:
             {"command": "start", "description": "Botni ishga tushirish"},
             {"command": "open", "description": "Chatty ilovasini ochish"},
             {"command": "list", "description": "Botga yozgan odamlar ro'yxati"},
+            {"command": "r", "description": "Javob yozish: /r <raqam> matn"},
+            {"command": "chats", "description": "Bo'limlar: chatlar, guruhlar, kanallar, botlar"},
+            {"command": "reply", "description": "Javob yozish (qisqa: /r)"},
             {"command": "music", "description": "Musiqalar ro'yxati"},
             {"command": "autoreply", "description": "Avto-javobni yoqish/o'chirish"},
             {"command": "users", "description": "Foydalanuvchilar ro'yxati (admin)"},
@@ -305,17 +346,24 @@ class BotNotifier:
         cmd = text.split()[0].split("@")[0] if text.startswith("/") else ""
 
         if from_id == self.owner_id:
-            # Owner: komandalar + delegat javob (reply orqali)
+            # Owner: komandalar + bot ichida javob (xabarnomaga reply)
             if cmd:
                 await self._handle_command(chat["id"], cmd, msg)
-            elif msg.get("reply_to_message"):
+                return
+            if msg.get("reply_to_message"):
+                # Avval bot ichidagi javob konteksti (oddiy chat yoki delegat),
+                # keyin eski delegat forward sxemasi.
+                if await self._handle_reply_in_bot(msg):
+                    return
                 await self._handle_owner_reply(msg)
-            else:
-                await self.send_notification(
-                    chat["id"],
-                    "Begonaga javob berish uchun forward qilingan xabarga javob (reply) yozing "
-                    "yoki Chatty ilovasini oching.",
-                )
+                return
+            await self.send_notification(
+                chat["id"],
+                "Javob yozish uchun kelgan xabar ostidagi 'Javob yozish' tugmasini bosing "
+                "yoki shu xabarga reply yozing. Ro'yxat: /list  ·  Javob: /r <raqam> matn",
+                force_reply=True,
+                placeholder="Masalan: /r 1 salom",
+            )
         else:
             # Begona odam: har bir xabar (shu jumladan /start) egaga relay qilinadi.
             await self._handle_stranger_message(msg)
@@ -337,11 +385,13 @@ class BotNotifier:
                 "Qanday ishlaydi:\n"
                 "1. Chatty ilovasida akkauntni ulaysiz (telefon + kod + 2FA)\n"
                 "2. Sizga xabar kelganda shu bot xabar beradi\n"
-                "3. \"Javob yozish\" tugmasi bilan ilovani ochasiz\n\n"
+                "3. Javobni shu bot ichida yozasiz — xabar akkauntingiz nomidan boradi\n\n"
                 "Komandalar:\n"
                 "/start — boshlash\n"
                 "/open — ilovani ochish\n"
                 "/list — botga yozgan odamlar\n"
+                "/r <raqam> matn — javob yozish\n"
+                "/chats — bo'limlar statistikasi\n"
                 "/music — musiqalar\n"
                 "/autoreply — avto-javobni yoqish/o'chirish\n"
                 "/users — foydalanuvchilar (admin)\n"
@@ -370,6 +420,10 @@ class BotNotifier:
             await self._cmd_vip(chat_id, msg)
         elif cmd == "/report":
             await self._cmd_report(chat_id)
+        elif cmd in ("/r", "/reply", "/javob"):
+            await self._cmd_reply(chat_id, msg)
+        elif cmd == "/chats":
+            await self._cmd_chats(chat_id)
 
     async def _cmd_list_dialogs(self, chat_id: int) -> None:
         from sqlalchemy import select
@@ -391,6 +445,39 @@ class BotNotifier:
             last = (d.last_msg_text or "")[:40]
             lines.append(f"{i}. {name} — {last}")
         await self.send_notification(chat_id, "\n".join(lines))
+
+    async def _cmd_chats(self, chat_id: int) -> None:
+        """Chatlar bo'limlar bo'yicha statistika (chatlar/guruhlar/kanallar/botlar)."""
+        from sqlalchemy import select  # noqa: PLC0415
+
+        from .db import Account, Dialog, SessionLocal  # noqa: PLC0415
+
+        async with SessionLocal() as db:
+            acc = (
+                await db.execute(select(Account).where(Account.auth_step == "ready").limit(1))
+            ).scalar_one_or_none()
+            if acc is None:
+                await self.send_notification(chat_id, "Akkaunt topilmadi.")
+                return
+            rows = (
+                await db.execute(select(Dialog).where(Dialog.account_id == acc.id))
+            ).scalars().all()
+        counts = {"user": 0, "group": 0, "channel": 0, "bot": 0}
+        for d in rows:
+            kind = d.kind or ("group" if d.peer_type == "chat" else "user")
+            counts[kind] = counts.get(kind, 0) + 1
+        total = sum(counts.values())
+        await self.send_notification(
+            chat_id,
+            "Bo'limlar (jami {}):\n"
+            "Chatlar: {}\n"
+            "Guruhlar: {}\n"
+            "Kanallar: {}\n"
+            "Botlar: {}\n\n"
+            "Ilovada ular alohida bo'limlar ko'rinishida.".format(
+                total, counts["user"], counts["group"], counts["channel"], counts["bot"]
+            ),
+        )
 
     async def _cmd_music(self, chat_id: int) -> None:
         from sqlalchemy import select
@@ -517,6 +604,221 @@ class BotNotifier:
                 timeout=10,
             )
 
+    # ---------------- bot ichida javob berish ----------------
+    async def save_reply_ctx(
+        self,
+        bot_message_id: int,
+        *,
+        scope: str,
+        account_id: int | None = None,
+        dialog_id: int | None = None,
+        msg_tg_id: int | None = None,
+        delegate_dialog_id: int | None = None,
+    ) -> None:
+        """Xabarnoma message_id'sini dialogga bog'laydi — reply qilinsa shu yerga boradi."""
+        if bot_message_id is None:
+            return
+        from sqlalchemy import delete  # noqa: PLC0415
+
+        from .db import BotReplyCtx, SessionLocal, utcnow  # noqa: PLC0415
+
+        async with SessionLocal() as db:
+            db.add(
+                BotReplyCtx(
+                    bot_message_id=bot_message_id,
+                    scope=scope,
+                    account_id=account_id,
+                    dialog_id=dialog_id,
+                    msg_tg_id=msg_tg_id,
+                    delegate_dialog_id=delegate_dialog_id,
+                )
+            )
+            # Vaqti-vaqti bilan eski kontekstlarni tozalab turamiz
+            if bot_message_id % 50 == 0:
+                await db.execute(
+                    delete(BotReplyCtx).where(
+                        BotReplyCtx.created_at < utcnow() - timedelta(days=30)
+                    )
+                )
+            await db.commit()
+
+    async def get_reply_ctx(self, bot_message_id: int) -> dict | None:
+        from sqlalchemy import select  # noqa: PLC0415
+
+        from .db import BotReplyCtx, SessionLocal  # noqa: PLC0415
+
+        async with SessionLocal() as db:
+            row = (
+                await db.execute(
+                    select(BotReplyCtx).where(BotReplyCtx.bot_message_id == bot_message_id)
+                )
+            ).scalar_one_or_none()
+            if row is None:
+                return None
+            return {
+                "scope": row.scope,
+                "account_id": row.account_id,
+                "dialog_id": row.dialog_id,
+                "msg_tg_id": row.msg_tg_id,
+                "delegate_dialog_id": row.delegate_dialog_id,
+            }
+
+    async def _handle_reply_in_bot(self, msg: dict) -> bool:
+        """Egasi bot ichida xabarnomaga reply yozdi — javobni aynan shu chatga yetkazamiz.
+
+        Saytga yo'naltirmaydi: javob to'g'ridan-to'g'ri Telegram ichida beriladi.
+        """
+        reply = msg.get("reply_to_message") or {}
+        reply_id = reply.get("message_id")
+        if not reply_id:
+            return False
+        ctx = await self.get_reply_ctx(reply_id)
+        if ctx is None:
+            return False
+
+        chat_id = msg["chat"]["id"]
+        text = (msg.get("text") or msg.get("caption") or "").strip()
+        media_type, file_id = media_info_of_bot_msg(msg)
+
+        if not text and media_type == "none":
+            await self.send_notification(chat_id, "Javob matnini yozing.")
+            return True
+
+        if ctx["scope"] == "delegate":
+            ok = await self._send_to_delegate(ctx["delegate_dialog_id"], text, media_type, file_id)
+        else:
+            ok = await self._send_to_chat(ctx, text, media_type, file_id)
+
+        if ok:
+            await self.send_notification(
+                chat_id, "Yuborildi", reply_to_message_id=msg["message_id"]
+            )
+        else:
+            await self.send_notification(
+                chat_id,
+                "Yuborilmadi. Akkaunt Telegram'ga ulanganligini tekshiring (/status).",
+                reply_to_message_id=msg["message_id"],
+            )
+        return True
+
+    async def _send_to_delegate(
+        self, delegate_dialog_id: int | None, text: str, media_type: str, file_id: str | None
+    ) -> bool:
+        from sqlalchemy import select  # noqa: PLC0415
+
+        from .db import DelegateDialog, DelegateMessage, SessionLocal, utcnow  # noqa: PLC0415
+        from .ws import ws_manager  # noqa: PLC0415
+
+        if delegate_dialog_id is None:
+            return False
+        async with SessionLocal() as db:
+            dlg = (
+                await db.execute(select(DelegateDialog).where(DelegateDialog.id == delegate_dialog_id))
+            ).scalar_one_or_none()
+            if dlg is None:
+                return False
+            if media_type != "none" and file_id:
+                sent = await self.send_media(dlg.bot_chat_id, file_id, media_type, text)
+            else:
+                sent = await self.send_text(dlg.bot_chat_id, text)
+            if not sent:
+                return False
+            out = DelegateMessage(
+                dialog_id=dlg.id, direction="out", text=text, media_type=media_type, file_id=file_id
+            )
+            db.add(out)
+            dlg.last_msg_text = text or (media_type if media_type != "none" else "")
+            dlg.last_msg_date = utcnow()
+            dlg.last_out = True
+            await db.flush()
+            serialized_dlg = _serialize_delegate_dialog(dlg)
+            serialized_msg = _serialize_delegate_message(out)
+            await db.commit()
+
+        owner_acc = await _owner_account_id()
+        if owner_acc is not None:
+            await ws_manager.broadcast(
+                owner_acc,
+                {"type": "delegate_message", "dialog": serialized_dlg, "message": serialized_msg},
+            )
+        return True
+
+    async def _send_to_chat(
+        self, ctx: dict, text: str, media_type: str, file_id: str | None
+    ) -> bool:
+        """Oddiy (akkaunt) chatga MTProto orqali javob yuboradi."""
+        from . import actions  # noqa: PLC0415
+        from .storage import storage  # noqa: PLC0415
+
+        account_id = ctx.get("account_id")
+        dialog_id = ctx.get("dialog_id")
+        if not account_id or not dialog_id:
+            return False
+        try:
+            if media_type != "none" and file_id:
+                data = await self.get_file(file_id)
+                if not data:
+                    return False
+                ext = _ext_for(media_type)
+                key = storage.put(data, _mime_for(media_type), ext)
+                await actions.send_media(
+                    account_id,
+                    dialog_id,
+                    key,
+                    media_type,
+                    caption=text,
+                    reply_to_tg_id=ctx.get("msg_tg_id"),
+                )
+            else:
+                await actions.send_text(account_id, dialog_id, text, ctx.get("msg_tg_id"))
+            return True
+        except Exception as e:  # noqa: BLE001
+            log.warning("Bot ichidan chatga yuborishda xato: %s", e)
+            return False
+
+    async def _cmd_reply(self, chat_id: int, msg: dict) -> None:
+        """/r <raqam|@username> matn — bot ichidan begonaga javob."""
+        from sqlalchemy import select  # noqa: PLC0415
+
+        from .db import DelegateDialog, SessionLocal  # noqa: PLC0415
+
+        raw = (msg.get("text") or "").split()
+        if len(raw) < 2:
+            await self.send_notification(chat_id, "Ishlatish: /r <raqam> matn  (masalan: /r 1 salom)")
+            return
+        target, body = raw[1], " ".join(raw[2:]).strip()
+        async with SessionLocal() as db:
+            if target.isdigit():
+                rows = (
+                    await db.execute(
+                        select(DelegateDialog)
+                        .order_by(DelegateDialog.last_msg_date.desc().nullslast())
+                        .limit(15)
+                    )
+                ).scalars().all()
+                idx = int(target) - 1
+                if not (0 <= idx < len(rows)):
+                    await self.send_notification(chat_id, "Bunday raqam yo'q. /list bilan tekshiring.")
+                    return
+                dlg = rows[idx]
+            else:
+                username = target.lstrip("@")
+                dlg = (
+                    await db.execute(
+                        select(DelegateDialog).where(DelegateDialog.username == username)
+                    )
+                ).scalar_one_or_none()
+                if dlg is None:
+                    await self.send_notification(chat_id, f"@{username} topilmadi. /list bilan tekshiring.")
+                    return
+            dlg_id = dlg.id
+            name = dlg.first_name or dlg.username or "Foydalanuvchi"
+        if not body:
+            await self.send_notification(chat_id, "Javob matnini yozing: /r 1 salom")
+            return
+        ok = await self._send_to_delegate(dlg_id, body, "none", None)
+        await self.send_notification(chat_id, f"{name} ga yuborildi" if ok else "Yuborilmadi")
+
     # ---------------- delegat relay ----------------
     async def _handle_stranger_message(self, msg: dict) -> None:
         """Begona odam botga yozdi — DB'ga saqlab, egaga relay qilamiz."""
@@ -540,10 +842,12 @@ class BotNotifier:
                     select(DelegateDialog).where(DelegateDialog.bot_chat_id == chat_id)
                 )
             ).scalar_one_or_none()
+            is_new = False
             if dlg is None:
                 dlg = DelegateDialog(bot_chat_id=chat_id, first_name=name, username=username)
                 db.add(dlg)
                 await db.flush()
+                is_new = True
             else:
                 if name:
                     dlg.first_name = name
@@ -567,6 +871,22 @@ class BotNotifier:
             serialized_dlg = _serialize_delegate_dialog(dlg)
             serialized_msg = _serialize_delegate_message(row)
             await db.commit()
+
+        # Bot ichida javob berish: forward qilingan xabar → kontekst.
+        # Egasi shu xabarga reply yozsa, javob begonaga bot nomidan boradi (saytga yo'naltirmaydi).
+        if notif_id:
+            await self.save_reply_ctx(
+                notif_id, scope="delegate", delegate_dialog_id=dlg.id
+            )
+            if is_new:
+                who = name or (f"@{username}" if username else "Foydalanuvchi")
+                await self.send_notification(
+                    self.owner_id,
+                    f"{who} yozdi. Javobni shu yerda yozing — xabar bot nomidan yetkaziladi.",
+                    force_reply=True,
+                    placeholder="Javobingizni yozing…",
+                    reply_to_message_id=notif_id,
+                )
 
         # Media bo'lsa — fonda yuklab keshga olamiz (Bot API getFile orqali,
         # MTProto client'ni bloklamaydi). Keyin media_url ochiq /api/media/{key} bo'ladi.

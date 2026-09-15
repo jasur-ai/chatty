@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { resolveUrl } from "../env";
-import { IconBot, IconLogout, IconMenu, IconSearch, IconSettings, IconShield } from "../icons";
+import { IconBot, IconGroup, IconLogout, IconMenu, IconSearch, IconSettings, IconShield, IconUser } from "../icons";
 import { useStore } from "../store";
+import type { Dialog, DialogKind } from "../types";
 import { Avatar } from "./Avatar";
 
 function formatTime(iso: string | null): string {
@@ -12,16 +13,55 @@ function formatTime(iso: string | null): string {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + (sameDay ? "" : "");
 }
 
+type SectionId = "all" | DialogKind;
+
+const SECTIONS: { id: SectionId; label: string }[] = [
+  { id: "all", label: "Barchasi" },
+  { id: "user", label: "Chatlar" },
+  { id: "group", label: "Guruhlar" },
+  { id: "channel", label: "Kanallar" },
+  { id: "bot", label: "Botlar" },
+];
+
+function SectionIcon({ id, size = 14 }: { id: SectionId; size?: number }) {
+  if (id === "bot") return <IconBot size={size} />;
+  if (id === "group") return <IconGroup size={size} />;
+  if (id === "channel") return <IconGroup size={size} />;
+  if (id === "user") return <IconUser size={size} />;
+  return null;
+}
+
 export function ChatList() {
-  const { accounts, current, dialogs, loadingChats, chatsError, selectAccount, openDialog, openSettings, logout, appUser, setView } = useStore();
+  const { accounts, current, dialogs, loadingChats, chatsError, selectAccount, openDialog, openSettings, logout, appUser, setView } =
+    useStore();
   const [search, setSearch] = useState("");
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [section, setSection] = useState<SectionId>("all");
 
   const isAdminLike = appUser?.is_admin || appUser?.is_owner;
 
-  const filtered = search
-    ? dialogs.filter((d) => d.title.toLowerCase().includes(search.toLowerCase()))
-    : dialogs;
+  const counts = useMemo(() => {
+    const c: Record<SectionId, number> = { all: dialogs.length, user: 0, group: 0, channel: 0, bot: 0 };
+    for (const d of dialogs) {
+      const k = (d.kind || "user") as DialogKind;
+      if (c[k] === undefined) c[k] = 0;
+      c[k] += 1;
+    }
+    return c;
+  }, [dialogs]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return dialogs.filter((d) => {
+      if (section !== "all" && (d.kind || "user") !== section) return false;
+      if (!q) return true;
+      return (
+        d.title.toLowerCase().includes(q) ||
+        (d.username ? d.username.toLowerCase().includes(q) : false) ||
+        (d.last_msg_text ? d.last_msg_text.toLowerCase().includes(q) : false)
+      );
+    });
+  }, [dialogs, search, section]);
 
   return (
     <aside className="sidebar">
@@ -59,6 +99,22 @@ export function ChatList() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        {/* Bo'limlar: chatlar / guruhlar / kanallar / botlar */}
+        <div className="chat-sections" role="tablist">
+          {SECTIONS.map((s) => (
+            <button
+              key={s.id}
+              role="tab"
+              aria-selected={section === s.id}
+              className={`chat-section ${section === s.id ? "active" : ""}`}
+              onClick={() => setSection(s.id)}
+            >
+              <SectionIcon id={s.id} size={13} />
+              <span>{s.label}</span>
+              <span className="section-count">{counts[s.id] ?? 0}</span>
+            </button>
+          ))}
+        </div>
       </header>
 
       <div className="chat-list">
@@ -84,25 +140,12 @@ export function ChatList() {
           </div>
         )}
         {!loadingChats && !chatsError && filtered.length === 0 && (
-          <div className="list-status muted">Chatlar hozircha yo'q</div>
+          <div className="list-status muted">
+            {search ? "Hech narsa topilmadi" : "Bu bo'limda chatlar yo'q"}
+          </div>
         )}
         {filtered.map((d) => (
-          <button key={d.id} className="chat-item" onClick={() => void openDialog(d)}>
-            <Avatar name={d.title} photo={resolveUrl(d.photo)} size={54} />
-            <div className="chat-item-body">
-              <div className="chat-item-top">
-                <span className="chat-item-title">{d.title}</span>
-                {d.last_msg_date && <span className="chat-item-time">{formatTime(d.last_msg_date)}</span>}
-              </div>
-              <div className="chat-item-bottom">
-                <span className="chat-item-last">
-                  {d.last_out ? "Siz: " : ""}
-                  {d.last_msg_text || ""}
-                </span>
-                {d.unread_count > 0 && <span className="unread-badge">{d.unread_count}</span>}
-              </div>
-            </div>
-          </button>
+          <ChatRow key={d.id} d={d} onOpen={() => void openDialog(d)} />
         ))}
       </div>
 
@@ -129,5 +172,31 @@ export function ChatList() {
         </button>
       </footer>
     </aside>
+  );
+}
+
+function ChatRow({ d, onOpen }: { d: Dialog; onOpen: () => void }) {
+  return (
+    <button className="chat-item" onClick={onOpen}>
+      <Avatar name={d.title} photo={resolveUrl(d.photo)} size={54} />
+      <div className="chat-item-body">
+        <div className="chat-item-top">
+          <span className="chat-item-title">
+            {d.kind === "bot" && <span className="kind-tag">bot</span>}
+            {d.kind === "channel" && <span className="kind-tag">kanal</span>}
+            {d.kind === "group" && <span className="kind-tag">guruh</span>}
+            {d.title}
+          </span>
+          {d.last_msg_date && <span className="chat-item-time">{formatTime(d.last_msg_date)}</span>}
+        </div>
+        <div className="chat-item-bottom">
+          <span className="chat-item-last">
+            {d.last_out ? "Siz: " : ""}
+            {d.last_msg_text || ""}
+          </span>
+          {d.unread_count > 0 && <span className="unread-badge">{d.unread_count}</span>}
+        </div>
+      </div>
+    </button>
   );
 }

@@ -1,13 +1,34 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { resolveUrl } from "../env";
-import { IconBack, IconBot, IconMic, IconPlus, IconSend, IconSpinner, IconStory } from "../icons";
+import { IconArrowDown, IconBack, IconBot, IconMic, IconPlus, IconSend, IconSpinner, IconStory } from "../icons";
 import { useStore } from "../store";
 import { Avatar } from "./Avatar";
 
 function fmtTime(iso: string | null): string {
   if (!iso) return "";
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Brauzer qo'llab-quvvatlaydigan yozib olish formatini tanlaydi
+ *  (iOS Safari webm o'rniga mp4 ishlatadi — aks holda MediaRecorder xato beradi). */
+function pickMime(kind: "voice" | "round"): string {
+  const candidates =
+    kind === "voice"
+      ? ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"]
+      : ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
+  if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported) {
+    for (const c of candidates) {
+      if (MediaRecorder.isTypeSupported(c)) return c;
+    }
+  }
+  return kind === "voice" ? "audio/webm" : "video/webm";
+}
+
+function extForMime(mime: string): string {
+  if (mime.includes("mp4")) return "mp4";
+  if (mime.includes("ogg")) return "ogg";
+  return "webm";
 }
 
 export function DelegateView() {
@@ -126,9 +147,28 @@ function DelegateChat() {
     };
   }, [recording]);
 
+  const [atBottom, setAtBottom] = useState(true);
+  const stickBottom = useRef(true);
+
+  function onScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    stickBottom.current = bottom;
+    setAtBottom(bottom);
+  }
+
+  function scrollToBottom() {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    stickBottom.current = true;
+    setAtBottom(true);
+  }
+
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el && stickBottom.current) el.scrollTop = el.scrollHeight;
   }, [delegateMessages.length, activeDelegateDialog?.id]);
 
   async function send() {
@@ -172,13 +212,14 @@ function DelegateChat() {
         video: kind === "round",
       });
       streamRef.current = stream;
-      const mime = kind === "voice" ? "audio/webm" : "video/webm";
+      const mime = pickMime(kind);
       const rec = new MediaRecorder(stream, { mimeType: mime });
       chunksRef.current = [];
       rec.ondataavailable = (e) => chunksRef.current.push(e.data);
       rec.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: mime });
-        const file = new File([blob], `${kind}-${Date.now()}.webm`, { type: mime });
+        const ext = extForMime(mime);
+        const file = new File([blob], `${kind}-${Date.now()}.${ext}`, { type: mime });
         setBusy(true);
         try {
           const up = await api.uploadMedia(current!.id, file, token!);
@@ -193,6 +234,12 @@ function DelegateChat() {
       rec.start();
       mediaRecorderRef.current = rec;
       setRecording(kind);
+      // Telegram dumaloq video uchun 60 soniya limit — avtomatik to'xtatamiz
+      if (kind === "round") {
+        window.setTimeout(() => {
+          if (mediaRecorderRef.current === rec && rec.state !== "inactive") stopRecording();
+        }, 60000);
+      }
     } catch {
       setError("Mikrofon/kamera ruxsati yo'q");
     }
@@ -225,7 +272,8 @@ function DelegateChat() {
         <span className="badge badge-admin">Bot vakili</span>
       </header>
 
-      <div className="messages" ref={scrollRef}>
+      <div className="messages-wrap">
+        <div className="messages" ref={scrollRef} onScroll={onScroll}>
         {delegateMessagesLoading && (
           <div className="messages-loading">
             <IconSpinner size={18} />
@@ -259,6 +307,16 @@ function DelegateChat() {
             </div>
           </div>
         ))}
+        </div>
+
+        <button
+          className={`jump-down ${atBottom ? "hidden" : ""}`}
+          onClick={scrollToBottom}
+          title="Oxirgi xabarlarga o'tish"
+          aria-label="Oxirgi xabarlarga o'tish"
+        >
+          <IconArrowDown size={20} />
+        </button>
       </div>
 
       <footer className="composer">

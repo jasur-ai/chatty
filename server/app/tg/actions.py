@@ -9,6 +9,7 @@ from pathlib import Path
 
 from sqlalchemy import select, update as sa_update
 from telethon import functions
+from telethon.tl.types import DocumentAttributeAudio, DocumentAttributeVideo
 
 from ..db import Dialog, Message, SessionLocal
 from .. import convert
@@ -19,6 +20,7 @@ from .sync import (
     _process_media,
     download_dialog_photo,
     input_peer,
+    kind_of,
     media_type_of,
     serialize_dialog,
     serialize_message,
@@ -111,6 +113,46 @@ async def backfill_avatars(account_id: int) -> None:
         _avatar_backfilling = False
 
 
+_kinds_backfilled: set[int] = set()
+
+
+async def backfill_kinds(account_id: int) -> None:
+    """Bo'lim turi (bot/user/group/channel) aniqlanmagan dialoglarni fonda to'ldiradi.
+
+    Eski dialoglarda `kind` bo'sh bo'lishi mumkin — ularni Telegram'dan
+    entity olib aniqlaymiz (har bir akkaunt uchun bir marta).
+    """
+    if account_id in _kinds_backfilled:
+        return
+    _kinds_backfilled.add(account_id)
+    client = manager.get(account_id)
+    if client is None:
+        _kinds_backfilled.discard(account_id)
+        return
+    try:
+        async with SessionLocal() as db:
+            rows = (
+                await db.execute(
+                    select(Dialog)
+                    .where(Dialog.account_id == account_id, Dialog.kind.is_(None))
+                    .limit(300)
+                )
+            ).scalars().all()
+            if not rows:
+                return
+            for d in rows:
+                try:
+                    entity = await asyncio.wait_for(
+                        client.get_entity(input_peer(d.tg_id, d.peer_type)), timeout=15.0
+                    )
+                except Exception:  # noqa: BLE001
+                    continue
+                d.kind = kind_of(entity)
+            await db.commit()
+    except Exception as e:  # noqa: BLE001
+        log.warning("Dialog bo'limlarini aniqlashda xato: %s", e)
+
+
 async def sync_dialogs(account_id: int, limit: int = 200, force: bool = False) -> list[dict]:
     # 1) DB'da allaqachon dialog bor bo'lsa — darhol qaytaramiz (tez javob).
     #    To'liq sinxronizatsiya faqat birinchi yuklanishda (DB bo'sh) yoki force bilan.
@@ -123,6 +165,9 @@ async def sync_dialogs(account_id: int, limit: int = 200, force: bool = False) -
             )
         ).scalars().all()
         if existing and not force:
+            # Bo'limlar (bot/user/group/channel) aniqlanmagan bo'lsa — fonda to'ldiramiz
+            if any(d.kind is None for d in existing):
+                asyncio.create_task(backfill_kinds(acc))
             return [serialize_dialog(d) for d in existing]
 
     # 2) Birinchi yuklanish yoki force — Telegram'dan to'liq sinxronizatsiya.
@@ -304,11 +349,18 @@ async def send_media(
             if converted:
                 data = converted
                 send_ext = ".mp4"
-        elif media_type == "video":
+        elif media_type == "video" and ext.lower() != ".mp4":
             converted = await asyncio.to_thread(convert.to_video, data, ext)
             if converted:
                 data = converted
                 send_ext = ".mp4"
+
+        # Telegramga aniq atributlar (duration, o'lcham) bilan yuboramiz.
+        # Telethon ularni hachoir orqali topadi — u bo'lmasa fayl "hujjat" bo'lib ketadi.
+        info = await asyncio.to_thread(convert.probe, data, send_ext) or {}
+        duration = int(info.get("duration") or 0)
+        width = int(info.get("width") or 0)
+        height = int(info.get("height") or 0)
 
         # R2'dan temp faylga chiqarib, Telethon orqali yuboramiz
         tmp = tempfile.NamedTemporaryFile(suffix=send_ext, delete=False)
@@ -323,9 +375,31 @@ async def send_media(
             if media_type == "voice":
                 kwargs["voice_note"] = True
                 kwargs.pop("force_document", None)
+                kwargs["attributes"] = [DocumentAttributeAudio(duration=max(duration, 1), voice=True)]
             elif media_type == "round":
                 kwargs["video_note"] = True
                 kwargs.pop("force_document", None)
+                kwargs["attributes"] = [
+                    DocumentAttributeVideo(
+                        duration=max(duration, 1),
+                        w=480,
+                        h=480,
+                        round_message=True,
+                        supports_streaming=True,
+                    )
+                ]
+            elif media_type == "video":
+                kwargs.pop("force_document", None)
+                kwargs["supports_streaming"] = True
+                if duration:
+                    kwargs["attributes"] = [
+                        DocumentAttributeVideo(
+                            duration=duration,
+                            w=width or 480,
+                            h=height or 854,
+                            supports_streaming=True,
+                        )
+                    ]
             sent = await client.send_file(entity, tmp.name, **kwargs)
         finally:
             Path(tmp.name).unlink(missing_ok=True)
