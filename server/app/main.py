@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from .api import admin, auth, bot, chats, delegate, lotus_api, vip
 from .config import settings
 from .db import init_db
+from . import convert
 from .notify import notifier
 from .scheduler import scheduler
 from .security import decode_token
@@ -85,6 +86,8 @@ async def health():
         "ok": True,
         "accounts_online": len(manager.clients),
         "bot_enabled": notifier.enabled,
+        # webm → ogg/mp4 konvertatsiya (ovoz/video note) ffmpeg'ga bog'liq
+        "ffmpeg": convert.ffmpeg_available(),
     }
 
 
