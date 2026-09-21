@@ -544,14 +544,20 @@ async def _ai_refine(events: list[dict], account_id: int) -> list[dict] | None:
     # Shuning uchun tadbirlar 15 talik bo'laklarga bo'linadi va HAR BIR bo'lak
     # alohida so'raladi — avval faqat events[:15] aniqlashtirilardi, qolganlari
     # qo'pol evristik nom bilan qolardi.
-    CHUNK = 15
-    MAX_CHUNKS = 6  # LLM'ni ortiqcha yuklamaslik uchun (90 tagacha tadbir)
+    # Bo'lak hajmi va matn uzunligi token kvotasiga moslangan: kichik bo'laklar
+    # ko'p so'rov degani, bu esa Groq bepul tarifida 429 ga olib keladi
+    # (avval 4 bo'lak x 3 urinish = 12 so'rov ketma-ket ketib, HAMMASI 429 oldi).
+    CHUNK = 24
+    MAX_CHUNKS = 3  # 72 tagacha tadbir, jami <= 3 so'rov
+    SNIPPET = 320  # belgi — token kvotasini tejash uchun
     refined: list[dict] = []
     any_ok = False
 
     for ci in range(0, min(len(events), CHUNK * MAX_CHUNKS), CHUNK):
+        if ci > 0:
+            await asyncio.sleep(4)  # rate-limit uchun bo'laklar orasida pauza
         chunk = events[ci : ci + CHUNK]
-        batch = [f"[{i}] {(ev['text'] or '')[:500]}" for i, ev in enumerate(chunk)]
+        batch = [f"[{i}] {(ev['text'] or '')[:SNIPPET]}" for i, ev in enumerate(chunk)]
         prompt = (
             "Quyida Telegram kanallaridan topilgan e'lonlar bor. Har biridan tadbir ma'lumotini "
             "ajrat. Javobni FAQAT JSON massiv ko'rinishida qaytar (boshqa hech narsa yozma). "
@@ -561,7 +567,7 @@ async def _ai_refine(events: list[dict], account_id: int) -> list[dict] | None:
         )
         # Groq bepul tarifi vaqti-vaqti bilan 429 qaytaradi — qayta urinamiz.
         out = None
-        for attempt in range(3):
+        for attempt in range(2):
             out = await lotus._llm(
                 [
                     {"role": "system", "content": "Sen matnlardan tadbir ma'lumotini ajratuvchi yordamchisan. Faqat JSON qaytar."},
@@ -570,8 +576,8 @@ async def _ai_refine(events: list[dict], account_id: int) -> list[dict] | None:
             )
             if out:
                 break
-            if attempt < 2:
-                await asyncio.sleep(5 * (attempt + 1))
+            if attempt < 1:
+                await asyncio.sleep(8)
         if not out:
             log.info("AI aniqlashtirish: %d-bo'lak javobsiz qoldi — evristik qoldi", ci // CHUNK + 1)
             refined.extend(chunk)
