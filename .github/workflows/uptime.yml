@@ -1,0 +1,33 @@
+name: Uptime — Chatty'ni uyg'oq saqlash
+
+# Render free tarif ~15 daqiqa harakatsizlikdan keyin serverni uxlatadi,
+# shunda ilova ochilganda 30-60 soniya "yuklanmayotgandek" ko'rinadi.
+# Shuning uchun har 5 daqiqada /api/health ga so'rov yuborib, serverni
+# doim uyg'oq saqlaymiz (repo public bo'lgani uchun Actions daqiqalari bepul).
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: /api/health ga so'rov yuborish
+        run: |
+          url="https://chatty-3eje.onrender.com/api/health"
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 "$url" || echo "000")
+            echo "urinish $i -> HTTP $code"
+            if [ "$code" = "200" ]; then
+              echo "Server uyg'oq."
+              exit 0
+            fi
+            sleep 5
+          done
+          # So'nggi urinish muvaffaqiyatsiz bo'lsa ham workflow'ni xato bilan
+          # tugatmaymiz (keyingi 5 daqiqada qayta uriniladi).
+          echo "oxirgi urinish muvaffaqiyatsiz"
+          exit 0

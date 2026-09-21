@@ -47,6 +47,7 @@ export function ChatList() {
   const [search, setSearch] = useState("");
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [section, setSection] = useState<SectionId>("all");
+  const [confirmLogout, setConfirmLogout] = useState(false);
 
   const isAdminLike = appUser?.is_admin || appUser?.is_owner;
 
@@ -180,11 +181,37 @@ export function ChatList() {
           <IconSettings size={22} />
           <span>Sozlamalar</span>
         </button>
-        <button className="footer-btn" title="Chiqish" onClick={() => void logout()}>
+        <button className="footer-btn" title="Chiqish" onClick={() => setConfirmLogout(true)}>
           <IconLogout size={22} />
           <span>Chiqish</span>
         </button>
       </footer>
+
+      {confirmLogout && (
+        <div className="overlay" onClick={() => setConfirmLogout(false)}>
+          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-title">Chiqish</div>
+            <div className="confirm-text">
+              Rostdan ham chiqmoqchimisiz? Akkaunt tizimdan chiqariladi va qayta kirish uchun
+              telefon kodi kerak bo'ladi.
+            </div>
+            <div className="confirm-actions">
+              <button className="btn ghost" onClick={() => setConfirmLogout(false)}>
+                Bekor qilish
+              </button>
+              <button
+                className="btn danger"
+                onClick={() => {
+                  setConfirmLogout(false);
+                  void logout();
+                }}
+              >
+                Ha, chiqish
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

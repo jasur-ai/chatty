@@ -9,6 +9,14 @@ export function App() {
   const { accounts, current, token, appUser, refreshAccounts, silentLogin } = useStore();
   const [booted, setBooted] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  // Server sovuq startda (Render free) 30-60s uyg'onishi mumkin — shunda
+  // foydalanuvchi "osilib qoldi" deb o'ylamasligi uchun izoh ko'rsatamiz.
+  const [slow, setSlow] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), 4000);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     void refreshAccounts().finally(() => setBooted(true));
@@ -49,6 +57,11 @@ export function App() {
         <img src="/chatty.svg" alt="Chatty" width={64} height={64} />
         <IconSpinner size={24} />
         <div className="splash-label">Ulanyapti…</div>
+        {slow && (
+          <div className="splash-hint">
+            Server uyg'onmoqda — birinchi ochilishda 30-60 soniya kutishingiz mumkin
+          </div>
+        )}
       </div>
     );
   }
