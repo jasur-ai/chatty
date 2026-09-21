@@ -51,6 +51,8 @@ interface Store {
   setReplyTo: (m: Message | null) => void;
   sendText: (text: string, replyTo?: Message | null) => Promise<void>;
   loadMore: () => Promise<void>;
+  patchMessage: (tgId: number, patch: Partial<Message>) => void;
+  removeMessage: (tgId: number) => void;
   addAccount: (account: Account, token: string, appUser: AppUserInfo) => void;
   refreshAccounts: () => Promise<void>;
   silentLogin: () => Promise<boolean>;
@@ -289,6 +291,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [current, token, activeDialog, messages, loadingMessages]);
 
+  /** Xabarni mahalliy yangilash (tahrirlashdan keyin ekranda darhol ko'rinsin). */
+  const patchMessage = useCallback((tgId: number, patch: Partial<Message>) => {
+    setMessages((prev) => prev.map((m) => (m.tg_id === tgId ? { ...m, ...patch } : m)));
+  }, []);
+
+  /** Xabarni ro'yxatdan olib tashlash (o'chirishdan keyin darhol yo'qolsin). */
+  const removeMessage = useCallback((tgId: number) => {
+    setMessages((prev) => prev.filter((m) => m.tg_id !== tgId));
+  }, []);
+
   const addAccount = useCallback(
     (account: Account, tk: string, info: AppUserInfo) => {
       saveToken(account.id, tk);
@@ -469,6 +481,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       backToList,
       sendText,
       loadMore,
+      patchMessage,
+      removeMessage,
       addAccount,
       refreshAccounts,
     }),
@@ -511,6 +525,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       backToList,
       sendText,
       loadMore,
+      patchMessage,
+      removeMessage,
       addAccount,
       refreshAccounts,
     ],

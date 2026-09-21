@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { resolveUrl } from "../env";
 import {
   IconBot,
@@ -187,31 +188,19 @@ export function ChatList() {
         </button>
       </footer>
 
-      {confirmLogout && (
-        <div className="overlay" onClick={() => setConfirmLogout(false)}>
-          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="confirm-title">Chiqish</div>
-            <div className="confirm-text">
-              Rostdan ham chiqmoqchimisiz? Akkaunt tizimdan chiqariladi va qayta kirish uchun
-              telefon kodi kerak bo'ladi.
-            </div>
-            <div className="confirm-actions">
-              <button className="btn ghost" onClick={() => setConfirmLogout(false)}>
-                Bekor qilish
-              </button>
-              <button
-                className="btn danger"
-                onClick={() => {
-                  setConfirmLogout(false);
-                  void logout();
-                }}
-              >
-                Ha, chiqish
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={confirmLogout}
+        title="Chiqish"
+        text="Rostdan ham chiqmoqchimisiz? Akkaunt tizimdan chiqariladi va qayta kirish uchun telefon kodi kerak bo'ladi."
+        confirmLabel="Ha, chiqish"
+        cancelLabel="Bekor qilish"
+        danger
+        onCancel={() => setConfirmLogout(false)}
+        onConfirm={() => {
+          setConfirmLogout(false);
+          void logout();
+        }}
+      />
     </aside>
   );
 }

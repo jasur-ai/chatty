@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import { ConfirmDialog } from "./ConfirmDialog";
 import {
   IconBot,
   IconCrown,
@@ -881,6 +882,7 @@ function AdminTab() {
   const [openAcc, setOpenAcc] = useState<number | null>(null);
   const [openDialogs, setOpenDialogs] = useState<Dialog[]>([]);
   const [loadingDialogs, setLoadingDialogs] = useState(false);
+  const [pendingVip, setPendingVip] = useState<AdminAccount | null>(null);
   const isOwner = !!appUser?.is_owner;
 
   useEffect(() => {
@@ -892,9 +894,12 @@ function AdminTab() {
 
   if (!token) return null;
 
-  async function toggleVip(a: AdminAccount) {
+  function toggleVip(a: AdminAccount) {
+    setPendingVip(a);
+  }
+
+  async function applyVip(a: AdminAccount) {
     const target = !a.app_user.is_vip;
-    if (!window.confirm(`Haqiqatan ham ${a.bot_name || a.first_name || a.phone} ni ${target ? "VIP" : "oddiy"} qilinsinmi?`)) return;
     await api.setVip(a.id, target, token!);
     setAccounts((await api.adminOverview(token!)).accounts);
   }
@@ -1009,6 +1014,24 @@ function AdminTab() {
         </>
       )}
       {msg && <div className="settings-msg">{msg}</div>}
+      <ConfirmDialog
+        open={pendingVip !== null}
+        title={pendingVip?.app_user.is_vip ? "VIP'dan olish" : "VIP berish"}
+        text={
+          pendingVip
+            ? `Haqiqatan ham ${pendingVip.bot_name || pendingVip.first_name || pendingVip.phone} ni ${pendingVip.app_user.is_vip ? "oddiy" : "VIP"} qilinsinmi?`
+            : ""
+        }
+        confirmLabel={pendingVip?.app_user.is_vip ? "O'chirish" : "VIP berish"}
+        cancelLabel="Bekor qilish"
+        danger={!!pendingVip?.app_user.is_vip}
+        onCancel={() => setPendingVip(null)}
+        onConfirm={() => {
+          const a = pendingVip;
+          setPendingVip(null);
+          if (a) void applyVip(a);
+        }}
+      />
     </div>
   );
 }

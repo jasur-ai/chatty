@@ -2445,3 +2445,10 @@ textarea {
   line-height: 1.4;
   color: var(--text-secondary);
 }
+
+/* Xabar ustidagi amallar xatosi */
+.bubble-error {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--danger, #e53935);
+}

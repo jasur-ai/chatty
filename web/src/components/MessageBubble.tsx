@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { api } from "../api";
 import { resolveUrl } from "../env";
-import { IconCheck, IconCheckDouble, IconDownload, IconEdit, IconReply, IconSpinner, IconStar, IconTrash, IconX } from "../icons";
+import { ConfirmDialog } from "./ConfirmDialog";
+import { IconCheck, IconCheckDouble, IconDownload, IconEdit, IconHeart, IconReply, IconSpinner, IconStar, IconTrash, IconX } from "../icons";
 import { useStore } from "../store";
 import type { Message } from "../types";
 
@@ -74,24 +75,35 @@ function MediaContent({ msg }: { msg: Message }) {
 const REACTIONS = ["👍", "❤️", "🔥", "😮", "😢", "🎉"];
 
 export function MessageBubble({ msg }: { msg: Message }) {
-  const { current, token, activeDialog, setReplyTo } = useStore();
+  const { current, token, activeDialog, setReplyTo, patchMessage, removeMessage } = useStore();
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState("");
   const [reacting, setReacting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [error, setError] = useState("");
   const hasMedia = msg.media_type !== "none";
 
-  async function act(fn: () => Promise<unknown>) {
+  async function act(fn: () => Promise<unknown>, failMsg = "Amal bajarilmadi") {
     try {
+      setError("");
       await fn();
     } catch (e) {
+      setError(failMsg);
       console.error(e);
     }
   }
 
   async function saveEdit() {
     if (!current || !token || !activeDialog) return;
-    await api.vipEdit(current.id, activeDialog.id, msg.tg_id, editText, token);
-    setEditing(false);
+    const next = editText.trim();
+    try {
+      await api.vipEdit(current.id, activeDialog.id, msg.tg_id, next, token);
+      patchMessage(msg.tg_id, { text: next });
+      setEditing(false);
+    } catch (e) {
+      setError("Tahrirlab bo'lmadi");
+      console.error(e);
+    }
   }
 
   return (
@@ -112,6 +124,7 @@ export function MessageBubble({ msg }: { msg: Message }) {
         ) : (
           msg.text && <div className="bubble-text">{msg.text}</div>
         )}
+        {error && <div className="bubble-error">{error}</div>}
         <div className="bubble-meta">
           <span>{fmtTime(msg.date)}</span>
           {msg.out &&
@@ -134,23 +147,19 @@ export function MessageBubble({ msg }: { msg: Message }) {
               <button
                 className="mini-btn"
                 title="O'chirish"
-                onClick={() => {
-                  if (window.confirm("Xabarni o'chirish?")) {
-                    void act(() => api.vipDelete(current!.id, activeDialog!.id, msg.tg_id, token!));
-                  }
-                }}
+                onClick={() => setConfirmDelete(true)}
               >
                 <IconTrash size={16} />
               </button>
             )}
             <button className="mini-btn" title="Reaksiya" onClick={() => setReacting((v) => !v)}>
-              <IconStar size={15} />
+              <IconHeart size={15} />
             </button>
             <button
               className="mini-btn"
               title="Yulduzcha (belgilash)"
               onClick={() =>
-                void act(() => api.vipStar(current!.id, { dialog_id: activeDialog!.id, tg_id: msg.tg_id, text: msg.text, dialog_title: activeDialog!.title }, token!))
+                void act(() => api.vipStar(current!.id, { dialog_id: activeDialog!.id, tg_id: msg.tg_id, text: msg.text, dialog_title: activeDialog!.title }, token!), "Belgilab bo'lmadi")
               }
             >
               <IconStar size={15} />
@@ -158,7 +167,7 @@ export function MessageBubble({ msg }: { msg: Message }) {
             {reacting && (
               <div className="reaction-bar">
                 {REACTIONS.map((r) => (
-                  <button key={r} onClick={() => { void act(() => api.vipReact(current!.id, activeDialog!.id, msg.tg_id, r, token!)); setReacting(false); }}>
+                  <button key={r} onClick={() => { void act(() => api.vipReact(current!.id, activeDialog!.id, msg.tg_id, r, token!), "Reaksiya qo'yilmadi"); setReacting(false); }}>
                     {r}
                   </button>
                 ))}
@@ -168,6 +177,25 @@ export function MessageBubble({ msg }: { msg: Message }) {
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Xabarni o'chirish"
+        text="Rostdan ham bu xabarni o'chirmoqchimisiz? Bu amalni qaytarib bo'lmaydi."
+        confirmLabel="O'chirish"
+        cancelLabel="Bekor qilish"
+        danger
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          if (current && token && activeDialog) {
+            void act(async () => {
+              await api.vipDelete(current.id, activeDialog.id, msg.tg_id, token);
+              removeMessage(msg.tg_id);
+            }, "Xabarni o'chirib bo'lmadi");
+          }
+        }}
+      />
     </div>
   );
 }
