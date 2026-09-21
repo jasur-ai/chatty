@@ -340,6 +340,7 @@ async def scan_folder(
 
     cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
     events: list[dict] = []
+    seen: set[tuple[int, int]] = set()  # (kanal_id, xabar_id) — dublikatni oldini oladi
     scanned = 0
 
     for p in peers[:MAX_CHANNELS]:
@@ -351,19 +352,36 @@ async def scan_folder(
         if kind not in ("channel", "group"):
             continue
         title = getattr(ent, "title", "") or "Kanal"
+        ent_id = int(getattr(ent, "id", 0))
         scanned += 1
         try:
             async for msg in client.iter_messages(ent, limit=MAX_PER_CHANNEL):
                 md = msg.date
                 if md and md < cutoff:
                     break  # eng yangidan eskiga — kesish sanasiga yetdik
+
+                # Servis xabarlar (qo'shildi/chiqdi...) — tadbir emas
+                if getattr(msg, "action", None) is not None:
+                    continue
+                # Yo'nalishni aniq ajratamiz:
+                #  - GURUHda o'zimiz yuborgan (out) xabarlar tadbir e'loni emas —
+                #    ularni tashlab yuboramiz (chiqarib yuborilgan = bizniki).
+                #  - KANALda postlar kanal nomidan bo'ladi (admin sifatida biz yozgan
+                #    bo'lsak ham) — ularni qoldiramiz.
+                if kind == "group" and getattr(msg, "out", False):
+                    continue
+
                 text = (msg.message or "").strip()
                 if not text:
                     continue
                 if not _matches_event(text.lower(), keywords):
                     continue
+                key = (ent_id, int(msg.id))
+                if key in seen:
+                    continue
+                seen.add(key)
                 ev = extract_event(text, title, kind, msg)
-                ev["dialog_tg_id"] = int(getattr(ent, "id", 0))
+                ev["dialog_tg_id"] = ent_id
                 events.append(ev)
         except Exception as e:  # noqa: BLE001
             log.warning("Kanal %s xabarlarini o'qishda xato: %s", title, e)
@@ -386,11 +404,17 @@ async def scan_folder(
 
 
 async def persist_events(
-    account_id: int, events: list[dict], folder_title: str = "", days: int = DEFAULT_DAYS
+    account_id: int,
+    events: list[dict],
+    folder_title: str = "",
+    days: int = DEFAULT_DAYS,
+    folder_id: int | None = None,
+    extra_keywords: str | None = None,
 ) -> None:
     """Topilgan tadbirlarni DB'ga saqlaydi (eski natijalarni almashtiradi).
 
     Ilova va bot /events buyrug'i bir xil so'nggi natijani ko'rishi uchun.
+    Config ham shu yerda yangilanadi (bir marta yoziladi — aralashmaydi).
     """
     from datetime import datetime as _dt
     from datetime import timezone as _tz
@@ -440,5 +464,9 @@ async def persist_events(
         else:
             config.days = days
             config.folder_title = folder_title or config.folder_title
+        if folder_id is not None:
+            config.folder_id = folder_id
+        if extra_keywords is not None:
+            config.extra_keywords = extra_keywords
         config.last_scan_at = utcnow()
         await db.commit()

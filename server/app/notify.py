@@ -556,24 +556,19 @@ class BotNotifier:
             await self.send_notification(chat_id, f"Skanerlab bo'lmadi: {e}")
             return
 
-        # Natijani DB'ga saqlaymiz (ilova ham bir xil so'nggi natijani ko'radi)
+        # Natijani DB'ga saqlaymiz (ilova ham bir xil so'nggi natijani ko'radi).
+        # Config ham shu bitta chaqiruvda yangilanadi — ikki marta yozilmaydi.
         try:
-            await eventscan.persist_events(acc_id, result["events"], result.get("folder_title", ""), result.get("days", days))
+            await eventscan.persist_events(
+                acc_id,
+                result["events"],
+                result.get("folder_title", ""),
+                result.get("days", days),
+                folder_id=folder_id,
+                extra_keywords=extra,
+            )
         except Exception as e:  # noqa: BLE001
             log.warning("Event'larni saqlashda xato: %s", e)
-
-        # Config'dagi papka/kalit so'zlarni yangilaymiz
-        async with SessionLocal() as db:
-            row = (
-                await db.execute(select(EventFolderConfig).where(EventFolderConfig.account_id == acc_id))
-            ).scalar_one_or_none()
-            if row is None:
-                row = EventFolderConfig(account_id=acc_id)
-                db.add(row)
-            row.folder_id = folder_id
-            row.days = result.get("days", days)
-            row.extra_keywords = extra
-            await db.commit()
 
         events = result["events"]
         scanned = result["scanned"]

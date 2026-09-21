@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from ..db import EventFolderConfig, EventItem, SessionLocal, get_session, utcnow
+from ..db import EventFolderConfig, EventItem, SessionLocal, get_session
 from ..tg import eventscan
 from .deps import require_account, resolve_account_id
 
@@ -135,19 +135,16 @@ async def scan(
         log.exception("Skanerlash xatosi")
         raise HTTPException(status_code=500, detail=f"Skanerlab bo'lmadi: {e}") from e
 
-    # Natijani DB'ga saqlaymiz (bot /app bir xil so'nggi natijani ko'radi)
-    await eventscan.persist_events(acc_id, result["events"], result["folder_title"], result["days"])
-
-    # Config'ni yangilaymiz (papka/kun/kalit so'zlar)
-    if config is None:
-        config = EventFolderConfig(account_id=acc_id, folder_id=folder_id, days=days, extra_keywords=extra or "")
-        db.add(config)
-    else:
-        config.folder_id = folder_id
-        config.days = days
-        config.extra_keywords = extra or ""
-    config.last_scan_at = utcnow()
-    await db.commit()
+    # Natijani DB'ga saqlaymiz; config ham shu yerda bir marta yangilanadi
+    # (bot va ilova bir xil so'nggi natijani ko'radi).
+    await eventscan.persist_events(
+        acc_id,
+        result["events"],
+        result["folder_title"],
+        result["days"],
+        folder_id=folder_id,
+        extra_keywords=extra or "",
+    )
 
     return {
         "events": result["events"],
