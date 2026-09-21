@@ -552,13 +552,24 @@ async def _ai_refine(events: list[dict], account_id: int) -> list[dict] | None:
         "\"when\": \"sana va vaqt\", \"place\": \"o'tkaziladigan joy\"}. "
         "Ma'lumot bo'lmasa bo'sh satr qoldir.\n\n" + "\n\n".join(batch)
     )
-    out = await lotus._llm(
-        [
-            {"role": "system", "content": "Sen matnlardan tadbir ma'lumotini ajratuvchi yordamchisan. Faqat JSON qaytar."},
-            {"role": "user", "content": prompt},
-        ]
-    )
+    # Groq bepul tarifi vaqti-vaqti bilan 429 (Too Many Requests) qaytaradi.
+    # Avval bitta urinishda jim None qaytarilardi — natijada AI aniqlashtirish
+    # ishlamasdi va foydalanuvchi qo'pol evristik nomlarni ko'rardi.
+    # Endi qisqa kutish bilan bir necha marta urinamiz.
+    out = None
+    for attempt in range(3):
+        out = await lotus._llm(
+            [
+                {"role": "system", "content": "Sen matnlardan tadbir ma'lumotini ajratuvchi yordamchisan. Faqat JSON qaytar."},
+                {"role": "user", "content": prompt},
+            ]
+        )
+        if out:
+            break
+        if attempt < 2:
+            await asyncio.sleep(6 * (attempt + 1))
     if not out:
+        log.info("AI aniqlashtirish ishlamadi (LLM javob bermadi) — evristik natija qoldi")
         return None
     try:
         import json  # noqa: PLC0415
