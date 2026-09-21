@@ -548,7 +548,7 @@ async def _ai_refine(events: list[dict], account_id: int) -> list[dict] | None:
     # ko'p so'rov degani, bu esa Groq bepul tarifida 429 ga olib keladi
     # (avval 4 bo'lak x 3 urinish = 12 so'rov ketma-ket ketib, HAMMASI 429 oldi).
     CHUNK = 24
-    MAX_CHUNKS = 3  # 72 tagacha tadbir, jami <= 3 so'rov
+    MAX_CHUNKS = 2  # 48 tagacha tadbir, jami <= 2 so'rov (skaner vaqti chegarasi)
     SNIPPET = 320  # belgi — token kvotasini tejash uchun
     refined: list[dict] = []
     any_ok = False
@@ -567,7 +567,10 @@ async def _ai_refine(events: list[dict], account_id: int) -> list[dict] | None:
         )
         # Groq bepul tarifi vaqti-vaqti bilan 429 qaytaradi — qayta urinamiz.
         out = None
-        for attempt in range(2):
+        # Kuzatildi: Groq 429 ni 1-2 urinishda qaytaradi, 3-urinishda 200 beradi.
+        # Shuning uchun kamida 3 urinish kerak (avval 2 taga kamaytirganim
+        # noto'g'ri edi — AI aniqlashtirish 0/46 ga tushgan edi).
+        for attempt in range(3):
             out = await lotus._llm(
                 [
                     {"role": "system", "content": "Sen matnlardan tadbir ma'lumotini ajratuvchi yordamchisan. Faqat JSON qaytar."},
@@ -576,8 +579,8 @@ async def _ai_refine(events: list[dict], account_id: int) -> list[dict] | None:
             )
             if out:
                 break
-            if attempt < 1:
-                await asyncio.sleep(8)
+            if attempt < 2:
+                await asyncio.sleep(9 * (attempt + 1))  # 9s, 18s
         if not out:
             log.info("AI aniqlashtirish: %d-bo'lak javobsiz qoldi — evristik qoldi", ci // CHUNK + 1)
             refined.extend(chunk)
