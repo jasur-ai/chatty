@@ -25,7 +25,7 @@ Bitta admin panel orqali bir nechta akkaunt (3+ ta) boshqariladi, oson switch qi
 │  Server — Python FastAPI + Telethon (MTProto)                 │
 │  • Account Manager (multi-session, StringSession DB'da)       │
 │  • Xabar pipeline: update → DB → WS push                      │
-│  • AI (Lotus) moduli · Auto-reply · Filtr (so'kinish)         │
+│  • AI (Lotus) moduli · Auto-reply · Tadbir skaneri            │
 │  • R2 (Cloudflare) media storage · JWT auth                   │
 └──────────────┬───────────────────────────────────────────────┘
                │ MTProto (Telegram user API — 2FA bilan kirish)
@@ -78,8 +78,7 @@ ko'rish, o'qilgan ✓✓ belgilar, media, guruhlar — bularning hammasi MTProto
 
 - [ ] Avto-javob: faqat belgilangan odamlarga o'zi yozadi; belgilanmagan bo'lsa user tuzgan matn
 - [ ] Taklifiy matnlar: "Hozir bandman, keyinroq yozing", "Salom, nima bilan murojaat qilyapsiz?" ...
-- [ ] So'kinish filtri: har safar ogohlantirish, 3 marta → blok
-- [ ] Guruhda: faqat ogohlantirish; 3+ marta → o'sha odam xabarlari chatda ko'rinmaydigan qilinadi
+- [x] So'kinish filtri — foydalanuvchi so'rovi bilan **butkul olib tashlandi** (ogohlantirish/blok yo'q)
 
 ## 7. Faza 4 — Admin tizimi
 

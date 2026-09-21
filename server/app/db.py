@@ -90,7 +90,7 @@ class Message(Base):
     date: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     reply_to: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     read: Mapped[bool] = mapped_column(Boolean, default=False)  # outgoing: o'qilganmi; incoming: biz o'qidikmi
-    # incoming uchun: filter/hide holati (so'kinish 3+ → yashirin)
+    # incoming uchun: yashirinlik belgisi (hozir doim False; filtrlar olib tashlangan)
     hidden: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
@@ -207,21 +207,6 @@ class AutoReplyTarget(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class WarnState(Base):
-    """So'kinish filtri uchun ogohlantirish holati (har bir odam/guruh uchun)."""
-
-    __tablename__ = "warn_states"
-    __table_args__ = (UniqueConstraint("account_id", "dialog_id", "user_tg_id", name="uq_warn_account_dialog_user"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
-    dialog_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # guruh/chat tg_id; private uchun ham
-    user_tg_id: Mapped[int] = mapped_column(BigInteger)
-    warns: Mapped[int] = mapped_column(Integer, default=0)
-    blocked: Mapped[bool] = mapped_column(Boolean, default=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
-
-
 class MusicPost(Base):
     """Admin joylagan musiqa taklifi — hammaga banner bo'lib chiqadi."""
 
@@ -260,6 +245,52 @@ class Reminder(Base):
     text: Mapped[str] = mapped_column(Text, default="")
     due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     done: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class EventFolderConfig(Base):
+    """Tadbir/event skaneri uchun tanlangan Telegram papka sozlamasi.
+
+    Har bir akkaunt bitta papkaga ega (kanallar/guruhlar to'plami). Shu papkadagi
+    barcha kanal/guruhlar so'nggi `days` kunlik xabarlari kalit so'zlar bo'yicha
+    tekshiriladi.
+    """
+
+    __tablename__ = "event_folder_configs"
+    __table_args__ = (UniqueConstraint("account_id", name="uq_efc_account"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
+    folder_id: Mapped[int] = mapped_column(Integer, default=0)  # Telegram dialog filtri id'si
+    folder_title: Mapped[str] = mapped_column(String(128), default="")
+    days: Mapped[int] = mapped_column(Integer, default=7)
+    # Qo'shimcha kalit so'zlar (vergul bilan) — standart lug'atga qo'shiladi
+    extra_keywords: Mapped[str] = mapped_column(Text, default="")
+    last_scan_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class EventItem(Base):
+    """Skaner topgan bitta tadbir/event (jadvaldagi bir qator)."""
+
+    __tablename__ = "event_items"
+    __table_args__ = (
+        UniqueConstraint("account_id", "dialog_tg_id", "msg_tg_id", name="uq_event_acc_dialog_msg"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
+    dialog_tg_id: Mapped[int] = mapped_column(BigInteger)
+    source_title: Mapped[str] = mapped_column(String(255), default="")
+    source_kind: Mapped[str] = mapped_column(String(12), default="channel")  # channel|group
+    msg_tg_id: Mapped[int] = mapped_column(BigInteger)
+    msg_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    name: Mapped[str] = mapped_column(String(255), default="")  # tadbir nomi
+    purpose: Mapped[str] = mapped_column(Text, default="")  # maqsadi/tavsifi
+    when_: Mapped[str] = mapped_column("when_", String(255), default="")  # vaqti
+    place: Mapped[str] = mapped_column(String(255), default="")  # o'tkaziladigan joyi
+    text: Mapped[str] = mapped_column(Text, default="")  # asl xabar matni
+    by_ai: Mapped[bool] = mapped_column(Boolean, default=False)  # AI tomonidan aniqlashtirilganmi
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

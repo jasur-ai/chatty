@@ -26,13 +26,13 @@ interface Store {
   token: string | null;
   settingsOpen: boolean;
   lotusOpen: boolean;
-  view: "chats" | "delegate" | "admin";
+  view: "chats" | "delegate" | "admin" | "events";
   delegateDialogs: DelegateDialog[];
   activeDelegateDialog: DelegateDialog | null;
   delegateMessages: DelegateMessage[];
   delegateLoading: boolean;
   delegateMessagesLoading: boolean;
-  setView: (v: "chats" | "delegate" | "admin") => void;
+  setView: (v: "chats" | "delegate" | "admin" | "events") => void;
   openAdmin: () => void;
   closeAdmin: () => void;
   loadDelegateDialogs: () => Promise<void>;
@@ -77,7 +77,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [chatsError, setChatsError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [lotusOpen, setLotusOpen] = useState(false);
-  const [view, setView] = useState<"chats" | "delegate" | "admin">("chats");
+  const [view, setView] = useState<"chats" | "delegate" | "admin" | "events">("chats");
   const [delegateDialogs, setDelegateDialogs] = useState<DelegateDialog[]>([]);
   const [activeDelegateDialog, setActiveDelegateDialog] = useState<DelegateDialog | null>(null);
   const [delegateMessages, setDelegateMessages] = useState<DelegateMessage[]>([]);

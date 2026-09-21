@@ -187,3 +187,38 @@ export interface Contact {
   username: string | null;
   phone: string | null;
 }
+
+// ---- Tadbirlar / Events ----
+export interface EventFolder {
+  id: number;
+  title: string;
+  peers: number;
+}
+
+export interface EventItem {
+  id?: number;
+  name: string;
+  purpose: string;
+  when: string;
+  place: string;
+  source_title?: string;
+  source_kind?: string;
+  msg_tg_id?: number;
+  msg_date?: string | null;
+  by_ai?: boolean;
+}
+
+export interface EventsScanResult {
+  events: EventItem[];
+  scanned: number;
+  folder_title: string;
+  days: number;
+}
+
+export interface EventsConfig {
+  folder_id: number;
+  folder_title: string;
+  days: number;
+  extra_keywords: string;
+  last_scan_at: string | null;
+}

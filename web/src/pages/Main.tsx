@@ -2,6 +2,7 @@ import { AdminPanel } from "../components/AdminPanel";
 import { ChatList } from "../components/ChatList";
 import { ChatView } from "../components/ChatView";
 import { DelegateView } from "../components/DelegateView";
+import { EventsView } from "../components/EventsView";
 import { LotusWidget } from "../components/LotusWidget";
 import { Settings } from "../components/Settings";
 import { IconStar } from "../icons";
@@ -22,6 +23,14 @@ export function Main() {
     return (
       <div className="app-shell">
         <DelegateView />
+      </div>
+    );
+  }
+
+  if (view === "events") {
+    return (
+      <div className="app-shell">
+        <EventsView />
       </div>
     );
   }

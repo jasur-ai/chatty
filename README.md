@@ -58,13 +58,14 @@ Web app (React PWA)  ⇄  REST + WebSocket  ⇄  FastAPI server  ⇄  MTProto (T
 |---|---|
 | 1. Yadro: login, chatlar, xabarlar, read-receipts, WS, R2 | ✅ tayyor |
 | 2. Chat funksiyalari: media, push-xabarnomalar, story, bot-persona | ✅ tayyor |
-| 3. Avto-javob + so'kinish filtri (warn/block/hide) + jadval | ✅ tayyor |
+| 3. Avto-javob + jadval | ✅ tayyor |
 | 4. Admin panel + VIP + adminlar boshqaruvi | ✅ tayyor |
 | 5. Lotus AI 0.0.1 (offline + LLM, ru/uz/en, eslatmalar) + Admin AI hisobot | ✅ tayyor |
 | 6. Pink rejim + final UI | ✅ tayyor |
 | 7. Musiqa taklifi (banner + reaksiya) | ✅ tayyor |
 | 8. Pro funksiyalar (ovozli/dumaloq video, forward, rejalashtirilgan xabar, qidiruv, eksport, analitika, zaxira, avto-o'chirish) | ✅ tayyor — **barcha foydalanuvchilar uchun** |
 | 9. AI (LLM) — VIP uchun | ✅ tayyor — [docs/VIP_FEATURES.md](docs/VIP_FEATURES.md) |
+| 10. Tadbirlar skaneri (papkadagi kanal/guruhlardan event topish) | ✅ tayyor |
 
 ## Muhim sozlamalar
 
@@ -79,7 +80,10 @@ Login ishlashi uchun `.env` da quyidagilar **majburiy**:
 ## Xususiyatlar
 
 - **Avto-javob**: yoqish + matn (tayyor takliflar) + "belgilangan odamlar" ro'yxati + jadval oynasi
-- **So'kinish filtri**: 1-2 marta ogohlantirish, 3-marta blok; guruhda xabarlar yashiriladi
+- **Tadbirlar skaneri**: tanlangan Telegram papkasidagi kanal/guruhlarning so'nggi 1 hafta
+  (sozlanishi) xabarlari kalit so'zlar bo'yicha tekshiriladi; topilgan tadbirlar nomi, maqsadi,
+  vaqti va joyi bilan chiroyli jadval ko'rinishida chiqariladi. Ilovada "Tadbirlar" bo'limi va
+  bot'da `/events` buyrug'i orqali.
 - **Bot-persona**: nom/rasm default akkaunt bilan bir xil, keyin alohida o'zgartiriladi; story joylash
 - **Pro funksiyalar** (barchaga): ovozli xabar, dumaloq video, forward, rejalashtirilgan xabar,
   qidiruv, eksport (JSON/CSV), zaxira, analitika, avto-o'chirish

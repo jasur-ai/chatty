@@ -1,6 +1,16 @@
 import { useMemo, useState } from "react";
 import { resolveUrl } from "../env";
-import { IconBot, IconGroup, IconLogout, IconMenu, IconSearch, IconSettings, IconShield, IconUser } from "../icons";
+import {
+  IconBot,
+  IconCalendar,
+  IconGroup,
+  IconLogout,
+  IconMenu,
+  IconSearch,
+  IconSettings,
+  IconShield,
+  IconUser,
+} from "../icons";
 import { useStore } from "../store";
 import type { Dialog, DialogKind } from "../types";
 import { Avatar } from "./Avatar";
@@ -162,6 +172,10 @@ export function ChatList() {
             <span>Admin</span>
           </button>
         )}
+        <button className="footer-btn" title="Tadbirlar skaneri" onClick={() => setView("events")}>
+          <IconCalendar size={22} />
+          <span>Tadbirlar</span>
+        </button>
         <button className="footer-btn" title="Sozlamalar" onClick={openSettings}>
           <IconSettings size={22} />
           <span>Sozlamalar</span>

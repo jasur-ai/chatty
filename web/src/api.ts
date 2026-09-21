@@ -8,6 +8,10 @@ import type {
   DelegateDialog,
   DelegateMessage,
   Dialog,
+  EventFolder,
+  EventsConfig,
+  EventsScanResult,
+  EventItem,
   ForwardRule,
   LoginResult,
   Message,
@@ -457,4 +461,37 @@ export const api = {
 
   vipChannelPost: (accountId: number, body: { dialog_id: number; text: string; send_at: string; silent: boolean }, token: string) =>
     req<{ ok: boolean }>("/api/vip/channel-post", { method: "POST", body: JSON.stringify({ account_id: accountId, ...body }) }, token),
+
+  // ---- Tadbirlar / Events ----
+  eventsFolders: (accountId: number, token: string) =>
+    req<{ folders: EventFolder[] }>(`/api/events/folders?account_id=${accountId}`, {}, token, 30000),
+
+  eventsConfigGet: (accountId: number, token: string) =>
+    req<{ config: EventsConfig | null }>(`/api/events/config?account_id=${accountId}`, {}, token),
+
+  eventsConfigSave: (
+    accountId: number,
+    body: { folder_id: number; folder_title: string; days: number; extra_keywords: string },
+    token: string,
+  ) => req<{ ok: boolean }>("/api/events/config", { method: "POST", body: JSON.stringify({ account_id: accountId, ...body }) }, token),
+
+  eventsScan: (
+    accountId: number,
+    body: { folder_id: number; days: number; extra_keywords: string },
+    token: string,
+  ) =>
+    req<EventsScanResult>(
+      "/api/events/scan",
+      { method: "POST", body: JSON.stringify({ account_id: accountId, ...body }) },
+      token,
+      // Papkadagi ko'p kanal/guruhni tekshirish vaqt oladi
+      180000,
+    ),
+
+  eventsList: (accountId: number, token: string) =>
+    req<{ events: EventItem[]; config: { folder_title: string | null; days: number; last_scan_at: string | null } }>(
+      `/api/events?account_id=${accountId}`,
+      {},
+      token,
+    ),
 };

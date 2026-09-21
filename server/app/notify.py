@@ -279,6 +279,7 @@ class BotNotifier:
             {"command": "list", "description": "Botga yozgan odamlar ro'yxati"},
             {"command": "r", "description": "Javob yozish: /r <raqam> matn"},
             {"command": "chats", "description": "Bo'limlar: chatlar, guruhlar, kanallar, botlar"},
+            {"command": "events", "description": "Tadbirlar: papkadagi kanal/guruhlardan event topish"},
             {"command": "reply", "description": "Javob yozish (qisqa: /r)"},
             {"command": "music", "description": "Musiqalar ro'yxati"},
             {"command": "autoreply", "description": "Avto-javobni yoqish/o'chirish"},
@@ -392,6 +393,7 @@ class BotNotifier:
                 "/list — botga yozgan odamlar\n"
                 "/r <raqam> matn — javob yozish\n"
                 "/chats — bo'limlar statistikasi\n"
+                "/events — tadbirlar (papkadagi kanal/guruhlar)\n"
                 "/music — musiqalar\n"
                 "/autoreply — avto-javobni yoqish/o'chirish\n"
                 "/users — foydalanuvchilar (admin)\n"
@@ -424,6 +426,8 @@ class BotNotifier:
             await self._cmd_reply(chat_id, msg)
         elif cmd == "/chats":
             await self._cmd_chats(chat_id)
+        elif cmd in ("/events", "/tadbirlar"):
+            await self._cmd_events(chat_id, msg)
 
     async def _cmd_list_dialogs(self, chat_id: int) -> None:
         from sqlalchemy import select
@@ -478,6 +482,135 @@ class BotNotifier:
                 total, counts["user"], counts["group"], counts["channel"], counts["bot"]
             ),
         )
+
+    async def _cmd_events(self, chat_id: int, msg: dict | None) -> None:
+        """Tadbirlar skaneri: papkadagi kanal/guruhlardan so'nggi 1 haftalik event topish.
+
+        /events — saqlangan papkani tekshiradi (yoki papkalar ro'yxatini ko'rsatadi)
+        /events <raqam> — ro'yxatdagi <raqam>-papkani tanlab tekshiradi
+        """
+        from sqlalchemy import select
+
+        from .db import Account, EventFolderConfig, SessionLocal
+        from .tg import eventscan
+
+        async with SessionLocal() as db:
+            acc = (
+                await db.execute(
+                    select(Account).where(Account.auth_step == "ready", Account.is_active.is_(True)).limit(1)
+                )
+            ).scalar_one_or_none()
+            if acc is None:
+                await self.send_notification(chat_id, "Akkaunt ulangan emas. Ilovada akkauntni ulang.")
+                return
+            config = (
+                await db.execute(select(EventFolderConfig).where(EventFolderConfig.account_id == acc.id))
+            ).scalar_one_or_none()
+            acc_id = acc.id
+
+        arg = (msg.get("text") or "").split()
+        pick = int(arg[1]) if len(arg) > 1 and arg[1].isdigit() else None
+
+        try:
+            folders = await eventscan.list_folders(acc_id)
+        except Exception as e:  # noqa: BLE001
+            await self.send_notification(chat_id, f"Papkalarni o'qib bo'lmadi: {e}")
+            return
+
+        if not folders:
+            await self.send_notification(
+                chat_id,
+                "Kanal/guruhli papka topilmadi. Telegram'da papka yarating "
+                "(Sozlamalar → Papkalar) va unga kanallar/guruhlarni qo'shing.",
+            )
+            return
+
+        # Papka tanlash: /events <raqam> yoki saqlangan config
+        folder_id = None
+        if pick is not None:
+            if not (1 <= pick <= len(folders)):
+                folder_id = None
+            else:
+                folder_id = folders[pick - 1]["id"]
+        elif config and config.folder_id:
+            folder_id = config.folder_id
+
+        if folder_id is None:
+            lines = ["Qaysi papkani tekshirishni tanlang:"]
+            for i, f in enumerate(folders, 1):
+                lines.append(f"{i}. {f['title']} ({f['peers']} kanal/guruh)")
+            lines.append("")
+            lines.append("Javob: /events <raqam>   (masalan: /events 1)")
+            lines.append("Yoki ilovada 'Tadbirlar' bo'limidan tanlang.")
+            await self.send_notification(chat_id, "\n".join(lines))
+            return
+
+        # Saqlangan config (kun/qo'shimcha kalit so'z)
+        days = config.days if config else 7
+        extra = config.extra_keywords if config else ""
+
+        await self.send_notification(chat_id, "Tekshirilmoqda… (bu biroz vaqt olishi mumkin)")
+        try:
+            result = await eventscan.scan_folder(acc_id, folder_id, days=days, extra_keywords=extra)
+        except Exception as e:  # noqa: BLE001
+            await self.send_notification(chat_id, f"Skanerlab bo'lmadi: {e}")
+            return
+
+        # Natijani DB'ga saqlaymiz (ilova ham bir xil so'nggi natijani ko'radi)
+        try:
+            await eventscan.persist_events(acc_id, result["events"], result.get("folder_title", ""), result.get("days", days))
+        except Exception as e:  # noqa: BLE001
+            log.warning("Event'larni saqlashda xato: %s", e)
+
+        # Config'dagi papka/kalit so'zlarni yangilaymiz
+        async with SessionLocal() as db:
+            row = (
+                await db.execute(select(EventFolderConfig).where(EventFolderConfig.account_id == acc_id))
+            ).scalar_one_or_none()
+            if row is None:
+                row = EventFolderConfig(account_id=acc_id)
+                db.add(row)
+            row.folder_id = folder_id
+            row.days = result.get("days", days)
+            row.extra_keywords = extra
+            await db.commit()
+
+        events = result["events"]
+        scanned = result["scanned"]
+        folder_title = result.get("folder_title", "")
+        if not events:
+            await self.send_notification(
+                chat_id,
+                f"'{folder_title}' papkasida {scanned} ta kanal/guruh tekshirildi "
+                f"(so'nggi {result.get('days', days)} kun) — tadbir topilmadi.",
+            )
+            return
+
+        # Jadval ko'rinishida (Telegram matn) — 4096 belgi chegarasiga bo'lib yuboramiz
+        head = (
+            f"Tadbirlar — '{folder_title}'\n"
+            f"{scanned} kanal/guruh · so'nggi {result.get('days', days)} kun · {len(events)} ta topildi\n"
+            "──────────────"
+        )
+        chunks = [head]
+        cur = head
+        for i, ev in enumerate(events[:15], 1):
+            block = [f"\n{i}. {ev['name']}"]
+            if ev.get("when"):
+                block.append(f"   Vaqt: {ev['when']}")
+            if ev.get("place"):
+                block.append(f"   Joy: {ev['place']}")
+            if ev.get("purpose"):
+                block.append(f"   Maqsad: {ev['purpose'][:140]}")
+            block.append(f"   Manba: {ev.get('source_title', '')}")
+            text = "\n".join(block)
+            if len(cur) + len(text) > 3800:
+                chunks.append(text)
+                cur = text
+            else:
+                cur += "\n" + text
+        for c in chunks:
+            await self.send_notification(chat_id, c)
 
     async def _cmd_music(self, chat_id: int) -> None:
         from sqlalchemy import select

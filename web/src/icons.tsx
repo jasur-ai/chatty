@@ -253,3 +253,12 @@ export const IconMegaphone = (p: IconProps) =>
       <path d="M14 8a5 5 0 0 1 0 8" />
     </>
   ));
+
+export const IconCalendar = (p: IconProps) =>
+  base(p, (
+    <>
+      <rect x="3" y="4" width="18" height="17" rx="2" />
+      <path d="M16 2v4M8 2v4M3 9h18" />
+      <path d="M8 13h3M13 13h3M8 17h3" />
+    </>
+  ));

@@ -37,14 +37,14 @@ async def on_new_message(event: events.NewMessage.Event, account_id: int) -> Non
 
     is_out = bool(msg.out)
 
-    # 1) Filtr + avto-javob (o'z session'lari bilan — SQLite write-lock'ni ushlab turmaslik uchun)
+    # 1) Avto-javob (so'kinish filtri olib tashlangan — hidden doim False)
     hidden = False
     if not is_out:
         peer = SimpleNamespace(tg_id=chat.id, peer_type=peer_type_of(chat))
         try:
             hidden = await apply_incoming(event.client, account_id, peer, msg)
         except Exception as e:  # noqa: BLE001
-            log.warning("Filtr/avto-javob xatosi: %s", e)
+            log.warning("Avto-javob xatosi: %s", e)
         # VIP avto-forward qoidalari
         asyncio.create_task(_apply_auto_forward(event.client, account_id, chat, msg))
 
