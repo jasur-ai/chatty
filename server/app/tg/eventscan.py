@@ -73,7 +73,7 @@ def _norm_keywords(extra: str | None) -> list[str]:
     """Standart lug'atga qo'shimcha kalit so'zlarni qo'shadi (kichik harfda)."""
     words = [w.strip().lower() for w in (extra or "").replace("\n", ",").split(",")]
     words = [w for w in words if w]
-    merged = [w.lower() for w in EVENT_KEYWORDS]
+    merged = [_norm_apos(w.lower()) for w in EVENT_KEYWORDS]
     for w in words:
         if w not in merged:
             merged.append(w)
@@ -127,11 +127,23 @@ def _dedup_sig(name: str, when_: str, source: str) -> str:
     return f"{n}|{w}"
 
 
+# Apostrof normallashtirish. O'zbek matnlarida ' (U+2018) va ' (U+2019)
+# ishlatiladi, signal/kalit so'zlarimizda esa ASCII '. Shu sababli
+# "bo'lib o'tdi" kabi signallar haqiqiy matnda HECH QACHON topilmasdi —
+# hisobot filtri shuning uchun ishlamagan.
+_APOS_MAP = str.maketrans({"\u2018": "'", "\u2019": "'", "\u02bb": "'", "`": "'", "\u00b4": "'"})
+
+
+def _norm_apos(text: str) -> str:
+    return (text or "").translate(_APOS_MAP)
+
+
 def classify_post(text_low: str) -> str:
     """Post turini aniqlaydi: 'past' (hisobot) | 'future' (e'lon) | 'unknown'."""
-    if any(sig in text_low for sig in PAST_SIGNALS):
+    t = _norm_apos(text_low)
+    if any(sig in t for sig in PAST_SIGNALS):
         return "past"
-    if any(sig in text_low for sig in FUTURE_SIGNALS):
+    if any(sig in t for sig in FUTURE_SIGNALS):
         return "future"
     return "unknown"
 
@@ -145,14 +157,15 @@ def _matches_event(text_low: str, keywords: list[str]) -> bool:
       - belgi aniqlanmagan postlar — faqat sana/vaqt topilsa olinadi
         (aks holda bu shunchaki "tadbir" so'zi uchragan oddiy post).
     """
-    if not any(k in text_low for k in keywords):
+    t = _norm_apos(text_low)
+    if not any(k in t for k in keywords):
         return False
-    kind = classify_post(text_low)
+    kind = classify_post(t)
     if kind == "past":
         return False
     if kind == "future":
         return True
-    return bool(extract_when(text_low))
+    return bool(extract_when(t))
 
 
 _EMOJI_RE = re.compile(
