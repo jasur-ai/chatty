@@ -119,6 +119,22 @@ def _iter_filters(res):
         yield getattr(item, "filter", item)  # DialogFilterSuggested -> .filter
 
 
+def _to_naive_utc(dt):
+    """Har qanday datetime'ni naive UTC'ga keltiradi.
+
+    Telethon 1.45'da `msg.date` — timezone-AWARE. Kod esa cutoff'ni naive
+    qilib hisoblardi, natijada har bir kanalning BIRINCHI xabarida
+    "can't compare offset-naive and offset-aware datetimes" TypeError chiqardi.
+    Bu xato `except Exception` ichida yutilgani uchun barcha kanal jim
+    o'tkazib yuborilardi va skaner doim 0 ta tadbir qaytarardi.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 def _folder_title(title) -> str:
     """Papka nomini oddiy matnga aylantiradi.
 
@@ -264,7 +280,7 @@ def extract_event(text: str, source_title: str, source_kind: str, msg) -> dict:
     when_ = extract_when(text)
     place = extract_place(text)
     purpose = derive_purpose(text, name, when_, place)
-    msg_date = msg.date
+    msg_date = _to_naive_utc(msg.date)
     return {
         "name": name,
         "purpose": purpose,
@@ -409,7 +425,7 @@ async def scan_folder(
         scanned += 1
         try:
             async for msg in client.iter_messages(ent, limit=MAX_PER_CHANNEL):
-                md = msg.date
+                md = _to_naive_utc(msg.date)
                 if md and md < cutoff:
                     break  # eng yangidan eskiga — kesish sanasiga yetdik
 
@@ -437,7 +453,10 @@ async def scan_folder(
                 ev["dialog_tg_id"] = ent_id
                 events.append(ev)
         except Exception as e:  # noqa: BLE001
-            log.warning("Kanal %s xabarlarini o'qishda xato: %s", title, e)
+            # Xato turi ham yoziladi — aks holda dasturlash xatosi (masalan
+            # TypeError) oddiy tarmoq xatosi bilan bir xil ko'rinib, butun
+            # skaner jim ishlamay qolgani bilinmay qoladi.
+            log.warning("Kanal %s xabarlarini o'qishda xato: %s: %s", title, type(e).__name__, e)
             continue
 
     # Xronologik tartib: yaqinlashib kelayotgan (yangi) tadbirlar tepada
