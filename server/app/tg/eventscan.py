@@ -112,6 +112,21 @@ FUTURE_SIGNALS = [
 ]
 
 
+def _dedup_sig(name: str, when_: str, source: str) -> str:
+    """Dublikatni aniqlash uchun qisqa imzo.
+
+    Bir xil tadbir bir nechta kanalda e'lon qilinadi; shuningdek bitta post
+    '(1-qism)'/'(2-qism)' bo'laklariga bo'linib takrorlanadi. Nom + vaqt
+    bo'yicha takrorlanishni oldini olamiz.
+    """
+    n = re.sub(r"\(\s*\d+\s*[- ]?qism\s*\)", " ", name or "", flags=re.I)
+    n = re.sub(r"[^\w\s]", "", n.lower())
+    n = re.sub(r"\s+", " ", n).strip()
+    n = " ".join(n.split()[:6])
+    w = re.sub(r"[^\w\s:]", "", (when_ or "").lower()).strip()
+    return f"{n}|{w}"
+
+
 def classify_post(text_low: str) -> str:
     """Post turini aniqlaydi: 'past' (hisobot) | 'future' (e'lon) | 'unknown'."""
     if any(sig in text_low for sig in PAST_SIGNALS):
@@ -289,30 +304,173 @@ def extract_place(text: str) -> str:
     )
     if m:
         return _clean_line(m.group(1), 180)
-    # 2) qatorlar ichida manzil naqshlari
+    # 2) qatorlar ichida manzil naqshlari.
+    #    Kirish sharti ham kengaytirildi — avval faqat ko'cha/tuman/shahar
+    #    tekshirilardi, shuning uchun "kampus", "saroy", "auditoriya",
+    #    "bino" dagi joylar umuman topilmasdi.
     for line in text.splitlines():
-        if re.search(
-            r"ko['’]chasi|ko['’]cha|tumani|shahar|prospekt|проспект|улица|ул\.|город|г\.\s",
-            line,
-            flags=re.I,
-        ):
-            cleaned = _clean_line(line, 180)
+        if _PLACE_HINT_RE.search(line):
+            cleaned = _short_place(line)
             if cleaned:
                 return cleaned
     return ""
 
 
+# Joy belgilari (kirish sharti va _short_place ichida bir xil ishlatiladi)
+_PLACE_HINT_RE = re.compile(
+    r"ko['’]chasi|ko['’]cha|tumani|tumanida|shahar|shahrida|prospekt|prospektida|"
+    r"bino|auditoriya|auditoriyada|saroy|saroyida|maydon|maydonida|"
+    r"universitet|universiteti|kampus|kampusida|"
+    r"проспект|улица|ул\.|город|дом|здание|аудитория",
+    re.I,
+)
+
+
+def _short_place(line: str) -> str:
+    """Manzil qatoridan faqat joy iborasini oladi.
+
+    Avval butun qator qaytarilardi, natijada 'joy' ustuniga butun gap tushardi:
+    "25-26-sentabr kunlari Ellikqal'a tumanida 'Sahro sadosi' IV xalqaro
+    festivali o'tkaziladi." — bu joy emas, gap.
+    """
+    cleaned = _clean_line(line, 180)
+    if not cleaned:
+        return ""
+    # Gap bo'lib ketgan bo'lsa — verguldan keyingi manzil qismini olamiz
+    parts = [x.strip() for x in re.split(r"[,;]\s*", cleaned) if x.strip()]
+    place_re = re.compile(
+        r"ko['’]chasi|ko['’]cha|tumani|tumanida|shahar|shahrida|prospekt|prospektida|"
+        r"bino|auditoriya|auditoriyada|saroy|saroyida|maydon|maydonida|"
+        r"universitet|universiteti|kampus|kampusida|"
+        r"проспект|улица|ул\.|город|дом|здание|аудитория",
+        re.I,
+    )
+    best = ""
+    for part in parts:
+        m = place_re.search(part)
+        if not m:
+            continue
+        # Gap emas, joy IBORASINI olamiz: kalit so'z atrofidagi so'zlar
+        words = part.split()
+        # kalit so'zning indeksini topamiz
+        idx = 0
+        pos = 0
+        for i, w in enumerate(words):
+            if place_re.search(w):
+                idx = i
+                break
+        start = max(0, idx - 3)
+        end = min(len(words), idx + 3)
+        phrase = " ".join(words[start:end]).strip(" ,;:-")
+        # Shovqinli boshlanishlarni kesamiz
+        phrase = re.sub(
+            r"^(\d{1,2}[- ]\d{1,2}[- ]?\w*\s+kunlari|\d{1,2}\s*\w+\s*kuni|"
+            r"kunlari|kuni)\s+",
+            "",
+            phrase,
+            flags=re.I,
+        )
+        # Gap fe'lini olib tashlaymiz ("o'tkaziladi" va h.k.)
+        phrase = re.sub(
+            r"\b(o['’]?tkaziladi|bo['’]?lib\s+o['’]?tadi|taklif\s+etamiz|o['’]?tkazilmoqda)\b.*$",
+            "",
+            phrase,
+            flags=re.I,
+        ).strip(" ,;:-")
+        # Boshidagi ortiqcha yuklama/vaqt so'zlarini kesamiz ("da TDIU..." -> "TDIU...")
+        phrase = re.sub(
+            r"^(da|ta|soat|kunlari|kuni|va|hamda|orqali|\d{1,2}[:.]\d{2})\s+",
+            "",
+            phrase,
+            flags=re.I,
+        ).strip(" ,;:-")
+        if phrase and len(phrase) > len(best):
+            best = phrase
+    if best:
+        return best[:100]
+    return ""
+
+
+# Sarlavha bo'la olmaydigan boshlanishlar (murojaat/shovqin/qism belgilari)
+_NAME_SKIP = (
+    "hurmatli", "assalomu", "salom", "diqqat", "e'lon", "elon", "va nihoyat",
+    "va niqoyat", "kutilgan lahza", "shoshiling", "unutmang", "do'stlar",
+    "dostlar", "qism", "davom", "muhim", "yangilik", "xabar",
+    "уважаемые", "здравствуйте", "внимание", "друзья",
+)
+_PART_RE = re.compile(r"^\(?\s*\d+\s*[- ]?\s*(qism|part|часть)\s*\)?$", re.I)
+
+
+def _is_title_like(cleaned: str) -> bool:
+    """Qator sarlavhaga o'xshaydimi (murojaat/shovqin emas)?"""
+    if len(cleaned) < 8 or len(cleaned) > 110:
+        return False
+    low = cleaned.lower()
+    if _PART_RE.match(cleaned):
+        return False
+    if any(low.startswith(skip) for skip in _NAME_SKIP):
+        return False
+    # Faqat katta harf + undov belgisidan ibarat shovqin ("VA NIHOYAT…")
+    letters = [ch for ch in cleaned if ch.isalpha()]
+    if letters and all(ch.isupper() for ch in letters) and cleaned.endswith(("!", "…", "...")):
+        return False
+    # Juda ko'p undov belgisi — sarlavha emas
+    if cleaned.count("!") >= 2:
+        return False
+    return True
+
+
+_DATE_CUT_RE = re.compile(
+    r"\b(?:\d{1,2}\s*[:.]\s*\d{2}"                       # 10:00
+    r"|\d{1,2}\s*[./-]\s*\d{1,2}"                        # 23.09
+    r"|\d{1,2}\s*[-–]?\s*(?:" + _MONTHS + r")\w*"        # 23-sentabr
+    r")",
+    re.I,
+)
+
+
+def _shorten_name(line: str) -> str:
+    """Uzun gapdan qisqa sarlavha yasaydi.
+
+    Butun gap nom sifatida chiqmasligi uchun: sana/vaqt boshlanishidan oldingi
+    qism olinadi, so'ng 70 belgigacha so'z chegarasida qisqartiriladi.
+    """
+    m = _DATE_CUT_RE.search(line)
+    if m and m.start() >= 12:
+        line = line[: m.start()]
+    line = re.sub(r"[\s,;:–—-]+$", "", line.strip())
+    if len(line) <= 72:
+        return line
+    cut = line[:72]
+    sp = cut.rfind(" ")
+    if sp > 30:
+        cut = cut[:sp]
+    return re.sub(r"[\s,;:–—-]+$", "", cut).strip()
+
+
 def derive_name(text: str) -> str:
-    """Tadbir nomini ajratadi: sarlavhaga o'xshash (qisqa) birinchi ma'noli qator."""
-    for line in text.splitlines():
-        cleaned = _clean_line(line, 140)
-        if not cleaned:
-            continue
-        # Juda uzun qator sarlavha emas — o'tkazamiz
-        if len(cleaned) > 110:
-            continue
-        return cleaned
-    # sarlavha topilmasa — birinchi 120 belgi
+    """Tadbir nomini ajratadi.
+
+    Avvalgi versiya shunchaki birinchi qatorni olardi, shuning uchun nom o'rniga
+    murojaat chiqardi: 'Hurmatli TDIU talabalari!', 'VA NIHOYAT… KUTILGAN
+    LAHZA YETIB KELDI!', '(1-qism)'. Endi murojaat/shovqin/qism qatorlari
+    o'tkaziladi va imkon bo'lsa tadbir kalit so'zi bor qator tanlanadi.
+    """
+    lines = [_clean_line(l, 140) for l in text.splitlines()]
+    lines = [l for l in lines if l]
+
+    # 1) tadbir kalit so'zi bor sarlavha-o'xshash qator — eng yaxshi nom
+    for l in lines[:8]:
+        if _is_title_like(l) and any(k in l.lower() for k in EVENT_KEYWORDS):
+            return _shorten_name(l)
+    # 2) shunchaki sarlavha-o'xshash birinchi qator
+    for l in lines[:8]:
+        if _is_title_like(l):
+            return _shorten_name(l)
+    # 3) sarlavha topilmasa — birinchi ma'noli qator
+    for l in lines:
+        if len(l) >= 8:
+            return _shorten_name(l)[:120]
     return _clean_line(text.replace("\n", " "), 120) or "Tadbir"
 
 
@@ -466,6 +624,7 @@ async def scan_folder(
     cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
     events: list[dict] = []
     seen: set[tuple[int, int]] = set()  # (kanal_id, xabar_id) — dublikatni oldini oladi
+    content_seen: set[str] = set()  # mazmun bo'yicha dublikat (bir xil tadbir)
     scanned = 0
 
     for p in peers[:MAX_CHANNELS]:
@@ -505,6 +664,13 @@ async def scan_folder(
                 if key in seen:
                     continue
                 seen.add(key)
+                # Mazmun bo'yicha dublikat: bir xil tadbir bir nechta kanalda
+                # e'lon qilinadi ("(1-qism)"/"(2-qism)" kabi bo'laklar ham).
+                ev_probe = extract_event(text, title, kind, msg)
+                sig = _dedup_sig(ev_probe.get("name", ""), ev_probe.get("when", ""), title)
+                if sig in content_seen:
+                    continue
+                content_seen.add(sig)
                 ev = extract_event(text, title, kind, msg)
                 ev["dialog_tg_id"] = ent_id
                 events.append(ev)
