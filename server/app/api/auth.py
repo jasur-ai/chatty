@@ -4,13 +4,14 @@ import hmac
 import json as _json
 from urllib.parse import parse_qs
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from ..config import settings
 from ..db import Account, AppUser, SessionLocal
 from ..security import create_token, decode_token
+from .deps import get_session, require_account, require_admin
 from ..tg.auth import start_login, submit_password, verify_code
 from ..tg.sync import serialize_account
 
@@ -179,19 +180,34 @@ async def list_accounts(authorization: str | None = Header(default=None)):
 
 
 @router.post("/logout")
-async def logout(body: dict | None = None):
-    """Akkauntdan chiqish — sessiyani o'chirib, keyingi kirishda qayta ulashni talab qiladi."""
+async def logout(
+    body: dict | None = None,
+    token_account: int = Depends(require_account),
+    db=Depends(get_session),
+):
+    """Akkauntdan chiqish — sessiyani o'chirib, keyingi kirishda qayta ulashni talab qiladi.
+
+    Yaroqli token majburiy: avval bu endpoint ochiq edi va account_id
+    berilmasa *barcha* akkauntni chiqarib yuborardi — ya'ni har qanday
+    anonim so'rov barcha sessiyalarni o'chirishi mumkin edi.
+    Endi faqat o'z akkauntini (yoki admin boshqalarini) chiqaradi.
+    """
     from ..tg.manager import manager as _mgr
 
-    account_id = (body or {}).get("account_id")
+    requested = (body or {}).get("account_id")
+    if requested and int(requested) != int(token_account):
+        # Boshqa akkauntni faqat admin chiqara oladi
+        await require_admin(token_account, db)
+    target_id = int(requested) if requested else int(token_account)
+
     async with SessionLocal() as db:
-        q = select(Account)
-        if account_id:
-            q = q.where(Account.id == account_id)
-        rows = (await db.execute(q)).scalars().all()
-        for a in rows:
-            await _mgr.stop_account(a.id)
-            a.session_enc = ""
-            a.auth_step = "none"
+        a = (
+            await db.execute(select(Account).where(Account.id == target_id))
+        ).scalar_one_or_none()
+        if a is None:
+            raise HTTPException(status_code=404, detail="Akkaunt topilmadi")
+        await _mgr.stop_account(a.id)
+        a.session_enc = ""
+        a.auth_step = "none"
         await db.commit()
     return {"ok": True}
