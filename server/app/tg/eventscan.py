@@ -117,19 +117,40 @@ async def list_folders(account_id: int) -> list[dict]:
     except Exception as e:  # noqa: BLE001
         raise ValueError(f"Papkalarni o'qib bo'lmadi: {e}") from e
 
+    # MUHIM: javob — DialogFilters OBYEKTI (iterable emas), ro'yxat uning
+    # .filters atributida. Avval `for f in res` yozilgani uchun
+    # "'DialogFilters' object is not iterable" xatosi chiqardi.
+    raw_filters = getattr(res, "filters", None)
+    if raw_filters is None and isinstance(res, (list, tuple)):
+        raw_filters = res
+    if not raw_filters:
+        return []
+
     folders: list[dict] = []
-    for f in res:
-        if isinstance(f, DialogFilterDefault):
+    for item in raw_filters:
+        # DialogFilterSuggested — ichida .filter bor (taklif qilingan papka)
+        f = getattr(item, "filter", item)
+        if f is None or isinstance(f, DialogFilterDefault):
             continue
+
         peers = list(getattr(f, "include_peers", []) or [])
+        peers += list(getattr(f, "pinned_peers", []) or [])
         n = sum(1 for p in peers if not isinstance(p, (InputPeerUser, PeerUser)))
-        if n == 0:
+
+        # Qoidaga asoslangan papkalar (groups=True / broadcasts=True) aniq peer
+        # ro'yxatiga ega bo'lmaydi — lekin aynan shular kanal/guruh papkasi.
+        # Ularni tashlab yubormaslik kerak, aks holda foydalanuvchi papkasini
+        # ro'yxatdan topa olmaydi.
+        by_rule = bool(getattr(f, "groups", False) or getattr(f, "broadcasts", False))
+        if n == 0 and not by_rule:
             continue  # faqat odamlar bor papka — tadbir skaneri uchun keraksiz
+
         folders.append(
             {
                 "id": int(getattr(f, "id", 0)),
                 "title": (getattr(f, "title", "") or "Papka"),
                 "peers": n,
+                "by_rule": by_rule and n == 0,
             }
         )
     return folders

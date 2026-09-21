@@ -174,7 +174,7 @@ async def sync_dialogs(account_id: int, limit: int = 200, force: bool = False) -
         if existing and not force:
             # Bo'limlar (bot/user/group/channel) aniqlanmagan bo'lsa — fonda to'ldiramiz
             if any(d.kind is None for d in existing):
-                asyncio.create_task(backfill_kinds(acc))
+                asyncio.create_task(backfill_kinds(account_id))
             return [serialize_dialog(d) for d in existing]
 
     # 2) Birinchi yuklanish yoki force — Telegram'dan to'liq sinxronizatsiya.
