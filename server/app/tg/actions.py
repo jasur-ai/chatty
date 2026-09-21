@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -896,23 +897,53 @@ async def schedule_channel_post(account_id: int, dialog_id: int, text: str, send
     return {"ok": True, "tg_id": sent.id}
 
 
+# Zaxira nusxa chegaralari: cheksiz yuklash so'rovni vaqt tugashigacha
+# ushlab turardi (223 dialog x 1000 xabar) va 500 qaytarardi.
+BACKUP_MAX_DIALOGS = 60
+BACKUP_MAX_MSGS = 200
+BACKUP_TIME_BUDGET = 100.0  # soniya
+
+
 async def backup_chats(account_id: int) -> dict:
-    """Barcha chatlarni JSON ko'rinishida R2'ga zaxiralash."""
+    """Chatlarni JSON ko'rinishida R2'ga zaxiralash (chegarali, xatoga chidamli)."""
     client = await _require_client(account_id)
+    started = time.monotonic()
     async with SessionLocal() as db:
         dialogs = (
-            await db.execute(select(Dialog).where(Dialog.account_id == account_id))
+            await db.execute(
+                select(Dialog)
+                .where(Dialog.account_id == account_id)
+                .order_by(Dialog.pinned.desc(), Dialog.last_msg_date.desc().nullslast())
+            )
         ).scalars().all()
+
         out = []
-        for d in dialogs:
-            entity = await client.get_entity(input_peer(d.tg_id, d.peer_type))
-            msgs = [m async for m in client.iter_messages(entity, limit=1000)]
+        skipped = 0
+        truncated = False
+        for d in dialogs[:BACKUP_MAX_DIALOGS]:
+            if time.monotonic() - started > BACKUP_TIME_BUDGET:
+                truncated = True
+                break
+            try:
+                entity = await client.get_entity(input_peer(d.tg_id, d.peer_type))
+                msgs = [
+                    m
+                    async for m in client.iter_messages(entity, limit=BACKUP_MAX_MSGS)
+                ]
+            except Exception as e:  # noqa: BLE001 — bitta dialog butun zaxirani buzmasin
+                log.warning("Zaxira: %s dialog o'tkazib yuborildi: %s", d.title, e)
+                skipped += 1
+                continue
             out.append(
                 {
                     "dialog": d.title,
                     "peer_type": d.peer_type,
                     "messages": [
-                        {"date": (m.date or datetime.now(timezone.utc)).isoformat(), "out": bool(m.out), "text": m.message or ""}
+                        {
+                            "date": (m.date or datetime.now(timezone.utc)).isoformat(),
+                            "out": bool(m.out),
+                            "text": m.message or "",
+                        }
                         for m in reversed(msgs)
                         if m.action is None
                     ],
@@ -920,4 +951,11 @@ async def backup_chats(account_id: int) -> dict:
             )
     data = json.dumps(out, ensure_ascii=False, indent=2).encode("utf-8")
     key = storage.put(data, "application/json", ".json")
-    return {"key": key, "url": storage.url(key), "dialogs": len(out)}
+    return {
+        "key": key,
+        "url": storage.url(key),
+        "dialogs": len(out),
+        "skipped": skipped,
+        "truncated": truncated,
+        "total_dialogs": len(dialogs),
+    }

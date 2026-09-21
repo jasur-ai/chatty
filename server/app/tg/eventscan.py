@@ -105,6 +105,23 @@ def _clean_line(s: str, limit: int = 200) -> str:
 
 
 # ---------------- papkalar ----------------
+def _folder_title(title) -> str:
+    """Papka nomini oddiy matnga aylantiradi.
+
+    Yangi Telegram qatlamlarida `title` — TextWithEntities OBYEKTI
+    ({'text': 'channels', 'entities': []}), oddiy str emas. Shu sababli
+    ro'yxatda nomi xom ko'rinishda chiqardi.
+    """
+    if title is None:
+        return "Papka"
+    text = getattr(title, "text", None)
+    if text is None and isinstance(title, dict):
+        text = title.get("text")
+    if text is None:
+        text = str(title)
+    return text.strip() or "Papka"
+
+
 async def list_folders(account_id: int) -> list[dict]:
     """Akkauntning Telegram papkalarini qaytaradi (faqat kanal/guruh borlari).
 
@@ -148,7 +165,7 @@ async def list_folders(account_id: int) -> list[dict]:
         folders.append(
             {
                 "id": int(getattr(f, "id", 0)),
-                "title": (getattr(f, "title", "") or "Papka"),
+                "title": _folder_title(getattr(f, "title", "")),
                 "peers": n,
                 "by_rule": by_rule and n == 0,
             }
