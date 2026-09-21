@@ -62,10 +62,13 @@ app = FastAPI(title="Chatty", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # dev uchun; prod'da toraytiriladi
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Wildcard "*" ishlatilmaydi: faqat Chatty frontend originlari ruxsat etiladi
+    # (Pages production + preview deploy'lari va lokal dev).
+    allow_origins=settings.cors_origins,
+    allow_origin_regex=settings.cors_origin_regex,
+    allow_credentials=False,  # auth Bearer token orqali, cookie ishlatilmaydi
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(auth.router)

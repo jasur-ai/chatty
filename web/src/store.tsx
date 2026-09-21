@@ -183,7 +183,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const refreshAccounts = useCallback(async () => {
     try {
-      const res = await api.accounts();
+      // Saqlangan token bo'lsa yuboramiz — backend to'liq ma'lumotni qaytaradi
+      // (tokensiz so'rovda telefon raqami yashiriladi).
+      const saved = loadTokens();
+      const anyToken = Object.values(saved)[0] ?? undefined;
+      const res = await api.accounts(anyToken);
       setAccounts(res.accounts);
       const ready = res.accounts.filter((a) => a.auth_step === "ready");
       setCurrent((prev) => {

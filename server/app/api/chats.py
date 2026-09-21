@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from ..db import AppUser, Dialog, Message, SessionLocal, get_session
+from ..security import verify_media_url
 from ..storage import storage
 from ..tg import actions
 from ..tg.manager import manager
@@ -130,12 +131,20 @@ async def upload_media(
 
 
 @router.get("/dialog/photo/{account_id}/{dialog_id}")
-async def dialog_photo(account_id: int, dialog_id: int):
+async def dialog_photo(
+    account_id: int,
+    dialog_id: int,
+    e: str | None = Query(default=None),
+    s_: str | None = Query(default=None, alias="s"),
+):
     """Profil rasmini talab bo'lganda yuklab beradi (on-demand).
 
     Rasm keshda bo'lsa darhol beradi; yo'qolgan bo'lsa Telegram'dan qayta yuklaydi.
-    <img> tegi Authorization sarlavhasini yubora olmagani uchun auth talab qilinmaydi.
+    <img> tegi Authorization sarlavhasini yubora olmagani uchun URL'dagi HMAC
+    imzo tekshiriladi (imzosiz so'rov rad etiladi).
     """
+    if not verify_media_url(f"/api/dialog/photo/{account_id}/{dialog_id}", e, s_):
+        raise HTTPException(status_code=403, detail="Yaroqsiz yoki muddati o'tgan havola")
     import io as _io
 
     async with SessionLocal() as db:
@@ -188,8 +197,19 @@ async def dialog_photo(account_id: int, dialog_id: int):
 
 
 @router.get("/media/fetch/{account_id}/{dialog_id}/{tg_id}")
-async def fetch_media(account_id: int, dialog_id: int, tg_id: int):
-    """Media'ni talab bo'lganda yuklab beradi (on-demand)."""
+async def fetch_media(
+    account_id: int,
+    dialog_id: int,
+    tg_id: int,
+    e: str | None = Query(default=None),
+    s_: str | None = Query(default=None, alias="s"),
+):
+    """Media'ni talab bo'lganda yuklab beradi (on-demand).
+
+    URL'dagi HMAC imzo tekshiriladi — imzosiz so'rov rad etiladi.
+    """
+    if not verify_media_url(f"/api/media/fetch/{account_id}/{dialog_id}/{tg_id}", e, s_):
+        raise HTTPException(status_code=403, detail="Yaroqsiz yoki muddati o'tgan havola")
     from ..tg.manager import manager as _mgr
     from ..tg.sync import _process_media, input_peer
 

@@ -4,13 +4,13 @@ import hmac
 import json as _json
 from urllib.parse import parse_qs
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from ..config import settings
 from ..db import Account, AppUser, SessionLocal
-from ..security import create_token
+from ..security import create_token, decode_token
 from ..tg.auth import start_login, submit_password, verify_code
 from ..tg.sync import serialize_account
 
@@ -127,9 +127,33 @@ async def password(body: PasswordIn):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+def _mask_phone(phone: str | None) -> str:
+    """Telefon raqamini yashiradi: +998917778633 -> +998 91 *** **33.
+
+    Login ekrani akkauntlar ro'yxatini ko'rsatishi kerak, lekin to'liq raqam
+    hammaga ochiq bo'lmasligi shart (PII).
+    """
+    if not phone:
+        return ""
+    digits = "".join(ch for ch in phone if ch.isdigit())
+    if len(digits) < 4:
+        return "***"
+    return f"+{digits[:3]} ** *** **{digits[-2:]}"
+
+
 @router.get("/accounts")
-async def list_accounts():
-    """Barcha akkauntlar (login ekrani + switch uchun)."""
+async def list_accounts(authorization: str | None = Header(default=None)):
+    """Akkauntlar ro'yxati (login ekrani + switch uchun).
+
+    To'liq ma'lumot faqat yaroqli token bilan beriladi. Tokensiz so'rovda
+    telefon raqami yashiriladi va admin/VIP belgilari berilmaydi — aks holda
+    har kim barcha akkauntlarning raqami va egasi haqidagi ma'lumotni
+    ko'rib qo'ya olardi.
+    """
+    authed = False
+    if authorization and authorization.startswith("Bearer "):
+        authed = decode_token(authorization.removeprefix("Bearer ").strip()) is not None
+
     async with SessionLocal() as db:
         rows = (await db.execute(select(Account))).scalars().all()
         users = (await db.execute(select(AppUser))).scalars().all()
@@ -137,6 +161,12 @@ async def list_accounts():
         out = []
         for a in rows:
             item = serialize_account(a)
+            if not authed:
+                item["phone"] = _mask_phone(a.phone)
+                item["username"] = None
+                item["app_user"] = None
+                out.append(item)
+                continue
             u = info.get(a.id)
             item["app_user"] = {
                 "is_owner": u.is_owner if u else False,

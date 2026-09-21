@@ -1158,13 +1158,14 @@ def _serialize_delegate_dialog(d) -> dict:
 
 
 def _serialize_delegate_message(m) -> dict:
+    from .security import sign_media_url
     from .storage import storage
 
     media_url = None
     if m.media_key and storage.exists(m.media_key):
         media_url = storage.url(m.media_key)
     elif m.media_type != "none" and getattr(m, "file_id", None):
-        media_url = f"/api/delegate/media/{m.id}"
+        media_url = sign_media_url(f"/api/delegate/media/{m.id}")
     return {
         "id": m.id,
         "dialog_id": m.dialog_id,

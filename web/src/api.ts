@@ -150,7 +150,10 @@ export const api = {
       body: JSON.stringify({ init_data: initData, tg_user_id: tgUserId }),
     }),
 
-  accounts: () => reqWithRetry<{ accounts: Account[] }>("/api/auth/accounts"),
+  // Token bo'lsa to'liq ma'lumot (telefon, admin/VIP) qaytadi; tokensiz so'rovda
+  // backend PII'ni yashiradi.
+  accounts: (token?: string) =>
+    reqWithRetry<{ accounts: Account[] }>("/api/auth/accounts", {}, token),
 
   logout: (accountId: number) =>
     req<{ ok: boolean }>("/api/auth/logout", { method: "POST", body: JSON.stringify({ account_id: accountId }) }),

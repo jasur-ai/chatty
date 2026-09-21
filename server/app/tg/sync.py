@@ -17,6 +17,7 @@ from telethon.tl.types import (
 )
 
 from ..db import Dialog, Message, SessionLocal
+from ..security import sign_media_url
 from ..storage import storage
 
 
@@ -274,7 +275,7 @@ async def update_dialog_last(db, dialog: Dialog, msg, out: bool) -> None:
 # ---------------- serialization ----------------
 def serialize_dialog(d: Dialog) -> dict:
     # photo_key None = rasm yo'q; "" (sentinel) yoki haqiqiy key = rasm bor → on-demand
-    photo = f"/api/dialog/photo/{d.account_id}/{d.id}" if d.photo_key is not None else None
+    photo = sign_media_url(f"/api/dialog/photo/{d.account_id}/{d.id}") if d.photo_key is not None else None
     return {
         "id": d.id,
         "tg_id": d.tg_id,
@@ -302,7 +303,7 @@ def serialize_message(m: Message) -> dict:
     if m.media_type in _FETCHABLE_MEDIA:
         # Doim on-demand endpoint — fayl keshda bo'lsa darhol beradi,
         # yo'qolgan (redeploy'da o'chgan) bo'lsa Telegram'dan qayta yuklab beradi.
-        media_url = f"/api/media/fetch/{m.account_id}/{m.dialog_id}/{m.tg_id}"
+        media_url = sign_media_url(f"/api/media/fetch/{m.account_id}/{m.dialog_id}/{m.tg_id}")
     elif m.media_key and storage.exists(m.media_key):
         media_url = storage.url(m.media_key)
     return {

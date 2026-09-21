@@ -32,6 +32,23 @@ class Settings:
     session_secret: str = os.getenv("SESSION_SECRET", "change-me")
     jwt_secret: str = os.getenv("JWT_SECRET", "change-me")
 
+    # CORS — faqat ruxsat etilgan originlar (wildcard "*" ishlatilmaydi)
+    cors_origins: list[str] = [
+        o.strip()
+        for o in os.getenv(
+            "CORS_ORIGINS",
+            "https://chatty-ws3.pages.dev,https://chatty.pages.dev",
+        ).split(",")
+        if o.strip()
+    ]
+    # Cloudflare Pages preview deploy'lari va lokal dev uchun regex
+    cors_origin_regex: str = os.getenv(
+        "CORS_ORIGIN_REGEX",
+        r"^https://([a-z0-9-]+\.)*chatty(-ws3)?\.pages\.dev$"
+        r"|^http://(localhost|127\.0\.0\.1)(:\d+)?$"
+        r"|^https://[a-z0-9-]+\.e2b\.app$",
+    )
+
     # Admin
     owner_id: int = int(os.getenv("OWNER_ID", "8004724563"))
     admin_ids: list[int] = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x]

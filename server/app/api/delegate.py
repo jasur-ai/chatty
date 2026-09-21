@@ -12,6 +12,7 @@ from sqlalchemy import select
 
 from ..db import DelegateDialog, DelegateMessage, get_session
 from ..notify import notifier, _serialize_delegate_dialog, _serialize_delegate_message
+from ..security import verify_media_url
 from ..storage import storage
 from .deps import require_account, require_admin
 
@@ -137,13 +138,20 @@ async def mark_read(
 @router.get("/media/{message_id}")
 async def get_media(
     message_id: int,
+    e: str | None = Query(default=None),
+    s_: str | None = Query(default=None, alias="s"),
     db=Depends(get_session),
 ):
     """Begona yuborgan media faylni xizmat qiladi (getFile orqali, kesh bilan).
 
-    Auth talab qilinmaydi — <img>/<audio> teglari Authorization sarlavhasini
-    yubora olmaydi; media avval keshlanadi va /api/media/{key} orqali ochiq beriladi.
+    <img>/<audio> teglari Authorization sarlavhasini yubora olmaydi, shuning
+    uchun URL'ga joylangan HMAC imzo tekshiriladi. Imzosiz so'rov rad etiladi —
+    aks holda ketma-ket id'larni sanash orqali begonalar yuborgan maxfiy
+    media'larni har kim yuklab olishi mumkin edi (IDOR).
     """
+    if not verify_media_url(f"/api/delegate/media/{message_id}", e, s_):
+        raise HTTPException(status_code=403, detail="Yaroqsiz yoki muddati o'tgan havola")
+
     m = (
         await db.execute(select(DelegateMessage).where(DelegateMessage.id == message_id))
     ).scalar_one_or_none()
