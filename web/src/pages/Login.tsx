@@ -22,12 +22,14 @@ export function Login() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [via, setVia] = useState<string | null>(null);
 
   async function doStart() {
     setBusy(true);
     setError("");
     try {
-      await api.startLogin(phone.trim());
+      const r = await api.startLogin(phone.trim());
+      setVia(r.via ?? null);
       setStep("code");
     } catch (e) {
       setError((e as Error).message);
@@ -134,9 +136,20 @@ export function Login() {
               <span className="muted">{phone}</span>
             </p>
             <div className="hint">
-              Bu raqam Telegram'da faol — kod SMS emas, Telegram ilovasidagi
-              "Telegram" servis chatiga yuboriladi. Chatlar ro'yxatida ko'k
-              samolyot belgili "Telegram" chatini oching, 5 xonali kod shu yerda.
+              {via === "sms" ? (
+                <>Telegram kodni <b>SMS</b> orqali yubordi. Xabar kelishini kuting.</>
+              ) : via === "call" ? (
+                <>Telegram kodni <b>qo'ng'iroq</b> orqali yubordi — kiruvchi raqamning oxirgi raqamlarini kiriting.</>
+              ) : via === "flash" ? (
+                <>Kodni olish uchun qurilmangizdagi tasdiqlashni bosing.</>
+              ) : (
+                <>
+                  Telegram kodni <b>ilovaga</b> yubordi (SMS emas). Chatlar ro'yxatida
+                  ko'k samolyot belgili <b>"Telegram"</b> servis chatini oching —
+                  5 xonali kod shu yerda.
+                </>
+              )}
+              <br />
               Agar 5 daqiqada kelmasa — urinishni to'xtating, 30-60 daqiqa kuting,
               keyin bir marta qayta yuboring (tez-tez so'rash Telegram'da blok qo'yadi).
             </div>

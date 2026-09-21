@@ -36,6 +36,12 @@ class Account(Base):
     phone_code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_code_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # anti-spam: oxirgi kod so'rovi
     code_attempts: Mapped[int] = mapped_column(Integer, default=0)  # soatdagi urinishlar soni
+    # Login davomida ishlatilayotgan StringSession (shifrlangan). Server qayta
+    # ishga tushsa ham kodni tekshirish ishlashi uchun bazada saqlanadi —
+    # aks holda kod kelguncha process restart bo'lsa, kod hech qachon
+    # tasdiqlanmasdi ("Avval kod yuborilishi kerak").
+    pending_session: Mapped[str] = mapped_column(Text, default="")
+    code_sent_via: Mapped[str | None] = mapped_column(String(16), nullable=True)  # app|sms|call|flash
     first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # Bot-persona sozlamalari (default = akkaunt bilan bir xil, keyin o'zgartiriladi)

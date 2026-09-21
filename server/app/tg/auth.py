@@ -8,7 +8,7 @@ from telethon.sessions import StringSession
 
 from ..config import settings
 from ..db import Account, Admin, AppUser, SessionLocal
-from ..security import create_token, encrypt_session
+from ..security import create_token, decrypt_session, encrypt_session
 from .manager import manager
 from .sync import serialize_account
 
@@ -51,6 +51,34 @@ def _check_code_limits(acc: Account) -> None:
             raise ValueError("Kod hozirgina yuborildi. 30 soniya kuting, qayta urinmang — aks holda Telegram bloklaydi.")
     if acc.code_attempts >= CODE_MAX_ATTEMPTS_PER_HOUR:
         raise ValueError("Juda ko'p urinish — Telegram kod yuborishni vaqtincha to'xtatdi. 30-60 daqiqa kuting.")
+
+
+def _sent_via(sent) -> str:
+    """Telegram kodni qaysi usulda yuborganini qaytaradi: app|sms|call|flash.
+
+    Ko'p hollarda kod SMS orqali EMAS, Telegram ilovasiga (service notification)
+    keladi — foydalanuvchi SMS kutib turgani uchun "kod kelmayapti" deb o'ylaydi.
+    """
+    name = type(getattr(sent, "type", None)).__name__
+    low = name.lower()
+    if "app" in low:
+        return "app"
+    if "sms" in low:
+        return "sms"
+    if "call" in low:
+        return "call"
+    if "flash" in low:
+        return "flash"
+    return "unknown"
+
+
+def _via_hint(via: str | None) -> str:
+    return {
+        "app": "Kod Telegram ilovangizga yuborildi (Telegram'dan kelgan xabarni oching). SMS kutmang.",
+        "sms": "Kod SMS orqali yuborildi.",
+        "call": "Kod qo'ng'iroq orqali yuborildi — telefon raqamining oxirgi raqamlarini kiriting.",
+        "flash": "Kodni olish uchun qurilmangizdagi tasdiqlashni bosing.",
+    }.get(via or "", "Kod yuborildi. Telegram ilovangizni tekshiring.")
 
 
 FREE_ACCOUNT_LIMIT = 3  # oddiy foydalanuvchi uchun maksimal akkaunt soni
@@ -118,7 +146,9 @@ async def start_login(phone: str, api_id: int | None = None, api_hash: str | Non
 
     manager.pending[phone] = client
 
-    # Qaysi usul tanlanganini log'ga yozamiz (SMS/app/qo'ng'iroq) — diagnostika uchun
+    # Qaysi usul tanlanganini aniqlaymiz (app/SMS/qo'ng'iroq) — foydalanuvchiga
+    # kodni QAYERDAN kutish kerakligini aytish uchun.
+    via = _sent_via(sent)
     log.info(
         "Kod so'rovi: %s -> %s (code_hash=%s...)",
         phone,
@@ -134,22 +164,31 @@ async def start_login(phone: str, api_id: int | None = None, api_hash: str | Non
         acc.phone_code_hash = sent.phone_code_hash
         acc.last_code_at = datetime.now(timezone.utc)
         acc.code_attempts += 1
+        # Login sessiyasini bazaga saqlaymiz — process qayta ishga tushsa ham
+        # kodni tekshirish davom etishi uchun.
+        acc.pending_session = encrypt_session(client.session.save())
+        acc.code_sent_via = via
         await db.commit()
 
-    return {"step": "code"}
+    return {"step": "code", "via": via, "attempts_left": max(0, CODE_MAX_ATTEMPTS_PER_HOUR - acc.code_attempts)}
 
 
 async def verify_code(phone: str, code: str) -> dict:
     """Kodni tekshiradi. 2FA kerak bo'lsa {"step":"password"} qaytaradi."""
     phone = normalize_phone(phone)
-    client = manager.pending.get(phone)
-    if client is None:
-        raise ValueError("Avval kod yuborilishi kerak")
 
     async with SessionLocal() as db:
         acc = (
             await db.execute(select(Account).where(Account.phone == phone))
         ).scalar_one()
+        if not acc.phone_code_hash:
+            raise ValueError("Avval kod yuborilishi kerak")
+        pending_sess = acc.pending_session
+
+    client = manager.pending.get(phone)
+    if client is None:
+        # Server qayta ishga tushgan — login sessiyasini bazadan tiklaymiz.
+        client = await _restore_pending_client(phone, acc, pending_sess)
 
     try:
         me = await client.sign_in(phone=phone, code=code, phone_code_hash=acc.phone_code_hash)
@@ -173,9 +212,14 @@ async def verify_code(phone: str, code: str) -> dict:
 
 async def submit_password(phone: str, password: str) -> dict:
     phone = normalize_phone(phone)
+    async with SessionLocal() as db:
+        acc = (
+            await db.execute(select(Account).where(Account.phone == phone))
+        ).scalar_one()
+        pending_sess = acc.pending_session
     client = manager.pending.get(phone)
     if client is None:
-        raise ValueError("Avval kod yuborilishi kerak")
+        client = await _restore_pending_client(phone, acc, pending_sess)
     try:
         me = await client.sign_in(phone=phone, password=password)
     except errors.PasswordHashInvalidError as e:
@@ -183,6 +227,28 @@ async def submit_password(phone: str, password: str) -> dict:
     except errors.FloodWaitError as e:
         raise ValueError(f"Juda ko'p urinish. {e.seconds} soniya kuting") from e
     return await _finalize(phone, client, me)
+
+
+async def _restore_pending_client(phone: str, acc: Account, pending_sess: str) -> TelegramClient:
+    """Bazada saqlangan login sessiyasidan clientni tiklaydi.
+
+    Render free tarifda process qayta ishga tushishi mumkin; shunda
+    manager.pending bo'shab qoladi va kod tekshirib bo'lmas edi.
+    """
+    if not pending_sess:
+        raise ValueError(
+            "Login seansi tugagan yoki server qayta ishga tushgan — kodni qayta yuboring."
+        )
+    raw = decrypt_session(pending_sess)
+    if not raw:
+        raise ValueError("Login seansi buzilgan — kodni qayta yuboring.")
+    api_id = acc.api_id or settings.tg_api_id
+    api_hash = acc.api_hash or settings.tg_api_hash
+    client = TelegramClient(StringSession(raw), api_id, api_hash)
+    await client.connect()
+    manager.pending[phone] = client
+    log.info("Login client bazadan tiklandi: %s", phone)
+    return client
 
 
 async def _finalize(phone: str, client: TelegramClient, me) -> dict:
@@ -195,6 +261,8 @@ async def _finalize(phone: str, client: TelegramClient, me) -> dict:
         ).scalar_one()
         acc.session_enc = enc
         acc.auth_step = "ready"
+        acc.pending_session = ""
+        acc.phone_code_hash = None
         acc.first_name = getattr(me, "first_name", None)
         acc.username = getattr(me, "username", None)
         await db.flush()

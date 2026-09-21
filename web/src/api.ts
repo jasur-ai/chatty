@@ -127,7 +127,7 @@ export const api = {
   health: () => req<{ ok: boolean }>("/api/health"),
 
   startLogin: (phone: string) =>
-    req<{ step: string }>("/api/auth/start", {
+    req<{ step: string; via?: string; attempts_left?: number }>("/api/auth/start", {
       method: "POST",
       body: JSON.stringify({ phone }),
     }),
