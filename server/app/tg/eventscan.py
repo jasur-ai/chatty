@@ -451,7 +451,7 @@ async def scan_folder(
     return {
         "events": events,
         "scanned": scanned,
-        "folder_title": getattr(folder, "title", ""),
+        "folder_title": _folder_title(getattr(folder, "title", "")),
         "days": days,
     }
 
