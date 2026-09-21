@@ -80,8 +80,64 @@ def _norm_keywords(extra: str | None) -> list[str]:
     return merged
 
 
+# ---- E'lon va hisobotni ajratish ----
+# Skaner avval "tadbir" so'zi bor HAR QANDAY postni olayotgan edi, shuning uchun
+# natijada o'tib bo'lgan tadbirlarning hisobotlari ("...dan video lavha",
+# "Natija", "g'oliblar") chiqardi — foydalanuvchi ularni "real emas" deb topdi.
+
+# Tadbir ALLAQACHON o'tib bo'lganini bildiruvchi belgilar (hisobot/lavha)
+PAST_SIGNALS = [
+    "bo'lib o'tdi", "bo'lib otdi", "o'tib bo'lgan", "o'tib bolgan",
+    "yakunlandi", "yakuniga yetdi", "yakunlari", "o'tkazildi", "otkazildi",
+    "tashrif buyurdi", "tashrif buyurdik", "tashrif",
+    "lavha", "lavhalar", "foto lavha", "video lavha", "fotosessiya",
+    "fotoreportaj", "foto hisobot", "qisqacha", "esdalik", "unutilmas",
+    "natijalar", "natija", "g'oliblar", "goliblar", "rahmat", "minnatdor",
+    "kecha bo'lib", "bugun bo'lib",
+    "состоялось", "состоялся", "состоялась", "прошел", "прошла", "прошло",
+    "завершился", "завершилась", "итог", "итоги", "благодарим", "спасибо",
+    "фоторепортаж", "победители",
+]
+
+# Tadbir KELGUSIDA bo'lishini bildiruvchi belgilar (haqiqiy e'lon)
+FUTURE_SIGNALS = [
+    "bo'lib o'tadi", "bo'lib otadi", "o'tkaziladi", "otkaziladi",
+    "o'tkazilmoqda", "otkazilmoqda", "kutilmoqda", "rejalashtirilgan",
+    "taklif etamiz", "taklif qilamiz", "taklif etiladi", "taklif etmoqda",
+    "ro'yxatdan o'ting", "ro'yxatdan o'tish", "royxatdan otish", "royxatdan oting",
+    "boshlanadi", "unutmang", "unutlang", "shoshiling", "imkoniyatni qo'ldan",
+    "sana:", "vaqt:", "manzil:", "joyi:", "boshlanish vaqti", "boshlanish sanasi",
+    "budet", "будет", "пройдет", "пройдёт", "приглашаем", "регистрация",
+    "ждём", "ждем", "не пропустите", "успейте", "заявки",
+]
+
+
+def classify_post(text_low: str) -> str:
+    """Post turini aniqlaydi: 'past' (hisobot) | 'future' (e'lon) | 'unknown'."""
+    if any(sig in text_low for sig in PAST_SIGNALS):
+        return "past"
+    if any(sig in text_low for sig in FUTURE_SIGNALS):
+        return "future"
+    return "unknown"
+
+
 def _matches_event(text_low: str, keywords: list[str]) -> bool:
-    return any(k in text_low for k in keywords)
+    """Haqiqiy tadbir E'LONI bo'lsa True.
+
+    Qoida:
+      - hisobot/lavha postlari — butunlay tashlanadi (o'tib bo'lgan tadbir);
+      - kelgusi belgisi bor postlar — olinadi;
+      - belgi aniqlanmagan postlar — faqat sana/vaqt topilsa olinadi
+        (aks holda bu shunchaki "tadbir" so'zi uchragan oddiy post).
+    """
+    if not any(k in text_low for k in keywords):
+        return False
+    kind = classify_post(text_low)
+    if kind == "past":
+        return False
+    if kind == "future":
+        return True
+    return bool(extract_when(text_low))
 
 
 _EMOJI_RE = re.compile(
