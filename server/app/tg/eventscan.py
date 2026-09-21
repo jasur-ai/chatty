@@ -105,6 +105,20 @@ def _clean_line(s: str, limit: int = 200) -> str:
 
 
 # ---------------- papkalar ----------------
+def _iter_filters(res):
+    """GetDialogFiltersRequest javobidan papka ro'yxatini qaytaradi.
+
+    Javob — DialogFilters OBYEKTI (iterable emas); ro'yxat .filters atributida.
+    Shu helper orqali o'qiymiz, chunki xuddi shu xato ikki joyda takrorlangan edi
+    (list_folders va scan_folder).
+    """
+    items = getattr(res, "filters", None)
+    if items is None and isinstance(res, (list, tuple)):
+        items = res
+    for item in items or []:
+        yield getattr(item, "filter", item)  # DialogFilterSuggested -> .filter
+
+
 def _folder_title(title) -> str:
     """Papka nomini oddiy matnga aylantiradi.
 
@@ -137,16 +151,8 @@ async def list_folders(account_id: int) -> list[dict]:
     # MUHIM: javob — DialogFilters OBYEKTI (iterable emas), ro'yxat uning
     # .filters atributida. Avval `for f in res` yozilgani uchun
     # "'DialogFilters' object is not iterable" xatosi chiqardi.
-    raw_filters = getattr(res, "filters", None)
-    if raw_filters is None and isinstance(res, (list, tuple)):
-        raw_filters = res
-    if not raw_filters:
-        return []
-
     folders: list[dict] = []
-    for item in raw_filters:
-        # DialogFilterSuggested — ichida .filter bor (taklif qilingan papka)
-        f = getattr(item, "filter", item)
+    for f in _iter_filters(res):
         if f is None or isinstance(f, DialogFilterDefault):
             continue
 
@@ -364,17 +370,26 @@ async def scan_folder(
     folder = next(
         (
             f
-            for f in res
-            if not isinstance(f, DialogFilterDefault) and int(getattr(f, "id", -1)) == int(folder_id)
+            for f in _iter_filters(res)
+            if f is not None
+            and not isinstance(f, DialogFilterDefault)
+            and int(getattr(f, "id", -1)) == int(folder_id)
         ),
         None,
     )
     if folder is None:
         raise ValueError("Tanlangan papka topilmadi")
 
-    peers = [p for p in (getattr(folder, "include_peers", []) or []) if not isinstance(p, (InputPeerUser, PeerUser))]
+    all_peers = list(getattr(folder, "include_peers", []) or [])
+    all_peers += list(getattr(folder, "pinned_peers", []) or [])
+    peers = [p for p in all_peers if not isinstance(p, (InputPeerUser, PeerUser))]
     if not peers:
-        return {"events": [], "scanned": 0, "folder_title": getattr(folder, "title", ""), "days": days}
+        return {
+            "events": [],
+            "scanned": 0,
+            "folder_title": _folder_title(getattr(folder, "title", "")),
+            "days": days,
+        }
 
     cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
     events: list[dict] = []
