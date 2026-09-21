@@ -540,67 +540,80 @@ async def _ai_refine(events: list[dict], account_id: int) -> list[dict] | None:
     if not await is_vip(account_id):
         return None
 
-    # Har bir tadbir matnini qisqartirib, bitta so'rovga joylaymiz
-    batch = []
-    for i, ev in enumerate(events[:15]):
-        snippet = (ev["text"] or "")[:500]
-        batch.append(f"[{i}] {snippet}")
-    prompt = (
-        "Quyida Telegram kanallaridan topilgan e'lonlar bor. Har biridan tadbir ma'lumotini "
-        "ajrat. Javobni FAQAT JSON massiv ko'rinishida qaytar (boshqa hech narsa yozma). "
-        "Har bir element: {\"i\": raqam, \"name\": \"tadbir nomi\", \"purpose\": \"maqsadi yoki qisqa tavsif\", "
-        "\"when\": \"sana va vaqt\", \"place\": \"o'tkaziladigan joy\"}. "
-        "Ma'lumot bo'lmasa bo'sh satr qoldir.\n\n" + "\n\n".join(batch)
-    )
-    # Groq bepul tarifi vaqti-vaqti bilan 429 (Too Many Requests) qaytaradi.
-    # Avval bitta urinishda jim None qaytarilardi — natijada AI aniqlashtirish
-    # ishlamasdi va foydalanuvchi qo'pol evristik nomlarni ko'rardi.
-    # Endi qisqa kutish bilan bir necha marta urinamiz.
-    out = None
-    for attempt in range(3):
-        out = await lotus._llm(
-            [
-                {"role": "system", "content": "Sen matnlardan tadbir ma'lumotini ajratuvchi yordamchisan. Faqat JSON qaytar."},
-                {"role": "user", "content": prompt},
-            ]
+    # Bitta so'rovga cheksiz matn joylab bo'lmaydi (token cheklovi + 429).
+    # Shuning uchun tadbirlar 15 talik bo'laklarga bo'linadi va HAR BIR bo'lak
+    # alohida so'raladi — avval faqat events[:15] aniqlashtirilardi, qolganlari
+    # qo'pol evristik nom bilan qolardi.
+    CHUNK = 15
+    MAX_CHUNKS = 6  # LLM'ni ortiqcha yuklamaslik uchun (90 tagacha tadbir)
+    refined: list[dict] = []
+    any_ok = False
+
+    for ci in range(0, min(len(events), CHUNK * MAX_CHUNKS), CHUNK):
+        chunk = events[ci : ci + CHUNK]
+        batch = [f"[{i}] {(ev['text'] or '')[:500]}" for i, ev in enumerate(chunk)]
+        prompt = (
+            "Quyida Telegram kanallaridan topilgan e'lonlar bor. Har biridan tadbir ma'lumotini "
+            "ajrat. Javobni FAQAT JSON massiv ko'rinishida qaytar (boshqa hech narsa yozma). "
+            'Har bir element: {"i": raqam, "name": "tadbir nomi", "purpose": "maqsadi yoki qisqa tavsif", '
+            '"when": "sana va vaqt", "place": "otkaziladigan joy"}. '
+            "Malumot bolmasa bosh satr qoldir.\n\n" + "\n\n".join(batch)
         )
-        if out:
-            break
-        if attempt < 2:
-            await asyncio.sleep(6 * (attempt + 1))
-    if not out:
-        log.info("AI aniqlashtirish ishlamadi (LLM javob bermadi) — evristik natija qoldi")
-        return None
-    try:
-        import json  # noqa: PLC0415
-
-        # JSON massivini matn ichidan ajratib olamiz (model qo'shimcha yozishi mumkin)
-        start = out.find("[")
-        end = out.rfind("]")
-        if start == -1 or end == -1:
-            return None
-        data = json.loads(out[start : end + 1])
-        by_idx = {int(item.get("i", -1)): item for item in data if isinstance(item, dict)}
-    except Exception as e:  # noqa: BLE001
-        log.warning("AI event JSON'ni o'qib bo'lmadi: %s", e)
-        return None
-
-    refined = []
-    for i, ev in enumerate(events):
-        item = by_idx.get(i)
-        if item:
-            refined.append(
-                {
-                    **ev,
-                    "name": (item.get("name") or ev["name"]).strip()[:255],
-                    "purpose": (item.get("purpose") or ev["purpose"]).strip(),
-                    "when": (item.get("when") or ev["when"]).strip()[:255],
-                    "place": (item.get("place") or ev["place"]).strip()[:255],
-                    "by_ai": True,
-                }
+        # Groq bepul tarifi vaqti-vaqti bilan 429 qaytaradi — qayta urinamiz.
+        out = None
+        for attempt in range(3):
+            out = await lotus._llm(
+                [
+                    {"role": "system", "content": "Sen matnlardan tadbir ma'lumotini ajratuvchi yordamchisan. Faqat JSON qaytar."},
+                    {"role": "user", "content": prompt},
+                ]
             )
-        else:
-            refined.append(ev)
+            if out:
+                break
+            if attempt < 2:
+                await asyncio.sleep(5 * (attempt + 1))
+        if not out:
+            log.info("AI aniqlashtirish: %d-bo'lak javobsiz qoldi — evristik qoldi", ci // CHUNK + 1)
+            refined.extend(chunk)
+            continue
+
+        try:
+            import json  # noqa: PLC0415
+
+            st = out.find("[")
+            en = out.rfind("]")
+            if st == -1 or en == -1:
+                refined.extend(chunk)
+                continue
+            data = json.loads(out[st : en + 1])
+            by_idx = {int(item.get("i", -1)): item for item in data if isinstance(item, dict)}
+        except Exception as e:  # noqa: BLE001
+            log.warning("AI event JSON'ni o'qib bo'lmadi: %s", e)
+            refined.extend(chunk)
+            continue
+
+        any_ok = True
+        for i, ev in enumerate(chunk):
+            item = by_idx.get(i)
+            if item:
+                refined.append(
+                    {
+                        **ev,
+                        "name": (item.get("name") or ev["name"]).strip()[:255],
+                        "purpose": (item.get("purpose") or ev["purpose"]).strip(),
+                        "when": (item.get("when") or ev["when"]).strip()[:255],
+                        "place": (item.get("place") or ev["place"]).strip()[:255],
+                        "by_ai": True,
+                    }
+                )
+            else:
+                refined.append(ev)
+
+    if not any_ok:
+        return None
+    # MAX_CHUNKS dan keyingi tadbirlar evristik holda qo'shiladi
+    if len(events) > CHUNK * MAX_CHUNKS:
+        refined.extend(events[CHUNK * MAX_CHUNKS :])
     return refined
 
 
