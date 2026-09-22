@@ -266,6 +266,7 @@ def _matches_event(text_low: str, keywords: list[str]) -> bool:
 
 _EMOJI_RE = re.compile(
     "["
+    "\U0001F1E6-\U0001F1FF"  # davlat bayroqlari (regional indicators)
     "\U0001F300-\U0001FAFF"  # belgilar, rasmlar, emoji
     "\u2600-\u27BF"  # turli belgilar
     "\u2B00-\u2BFF"  # strelkalar/yulduzchalar

@@ -17,6 +17,20 @@ function fmtDate(iso: string | null): string {
   return d.toLocaleDateString([], { day: "2-digit", month: "short" });
 }
 
+/** ISO sanadan qisqa, o'qishli ko'rinish yasaydi: "23-sen, 10:00". */
+function fmtEventDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const months = ["yan","fev","mar","apr","may","iyn","iyl","avg","sen","okt","noy","dek"];
+  const day = d.getDate();
+  const mo = months[d.getMonth()];
+  const hh = d.getHours().toString().padStart(2, "0");
+  const mm = d.getMinutes().toString().padStart(2, "0");
+  const hasTime = hh !== "00" || mm !== "00";
+  return hasTime ? `${day}-${mo}, ${hh}:${mm}` : `${day}-${mo}`;
+}
+
 export function EventsView() {
   const { current, token, setView } = useStore();
   const [folders, setFolders] = useState<EventFolder[]>([]);
@@ -210,6 +224,7 @@ export function EventsView() {
                       <th>#</th>
                       <th>Tadbir nomi</th>
                       <th>Maqsadi</th>
+                      <th>Sana</th>
                       <th>Vaqti</th>
                       <th>Joyi</th>
                       <th>Manba</th>
@@ -224,6 +239,7 @@ export function EventsView() {
                           {e.by_ai && <span className="ai-tag">AI</span>}
                         </td>
                         <td className="td-purpose">{e.purpose || "—"}</td>
+                        <td className="td-date">{fmtEventDate(e.event_at) || "—"}</td>
                         <td className="td-when">{e.when || "—"}</td>
                         <td className="td-place">{e.place || "—"}</td>
                         <td className="td-source">{e.source_title || ""}</td>
@@ -247,6 +263,12 @@ export function EventsView() {
                         <div className="event-field">
                           <span className="field-label">Maqsadi</span>
                           <span>{e.purpose}</span>
+                        </div>
+                      )}
+                      {fmtEventDate(e.event_at) && (
+                        <div className="ev-field">
+                          <span className="field-label">Sana</span>
+                          <span>{fmtEventDate(e.event_at)}</span>
                         </div>
                       )}
                       {e.when && (

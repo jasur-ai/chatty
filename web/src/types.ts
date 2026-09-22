@@ -201,6 +201,8 @@ export interface EventItem {
   purpose: string;
   when: string;
   place: string;
+  /** Server tahlil qilgan tadbir sanasi (ISO). O'tganlar jadvalga kirmaydi. */
+  event_at?: string | null;
   source_title?: string;
   source_kind?: string;
   msg_tg_id?: number;

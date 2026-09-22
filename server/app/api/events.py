@@ -152,6 +152,8 @@ async def scan(
         "scanned": result["scanned"],
         "folder_title": result["folder_title"],
         "days": result["days"],
+        # O'tib bo'lgani uchun jadvalga kiritilmagan tadbirlar soni
+        "dropped_past": result.get("dropped_past", 0),
     }
 
 
