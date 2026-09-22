@@ -148,6 +148,102 @@ def classify_post(text_low: str) -> str:
     return "unknown"
 
 
+# ---------------- sana tahlili va ustuvorlik ----------------
+_MONTH_NUMS = {
+    "yanvar": 1, "yan": 1, "fevral": 2, "fev": 2, "mart": 3, "mar": 3,
+    "aprel": 4, "apr": 4, "may": 5, "iyn": 6, "iyun": 6, "iyl": 7, "iyul": 7,
+    "avgust": 8, "avg": 8, "sentabr": 9, "sentyabr": 9, "sen": 9,
+    "oktabr": 10, "okt": 10, "noyabr": 11, "noy": 11, "dekabr": 12, "dek": 12,
+    "январ": 1, "феврал": 2, "март": 3, "апрел": 4, "мае": 5, "мая": 5,
+    "июн": 6, "июл": 7, "август": 8, "сентябр": 9, "октябр": 10,
+    "ноябр": 11, "декабр": 12,
+}
+
+
+def parse_event_date(text: str, now: datetime | None = None) -> datetime | None:
+    """Matndan tadbir SANASINI datetime qilib ajratadi (topilmasa None).
+
+    Bu ikki narsa uchun kerak:
+      1) o'tib bo'lgan tadbirlarni jadvaldan olib tashlash;
+      2) tadbirlarni yaqinlashish tartibida saralash.
+    """
+    now = now or datetime.now(timezone.utc).replace(tzinfo=None)
+    t = _norm_apos(text or "").lower()
+    if not t:
+        return None
+
+    day = month = None
+    explicit_year = None
+
+    # 1) "23 sentabr" / "23-sentyabr kuni"
+    for m in re.finditer(r"\b(\d{1,2})\s*[-–]?\s*([a-zа-яё]{3,10})", t):
+        mo = _MONTH_NUMS.get(m.group(2)[:8]) or _MONTH_NUMS.get(m.group(2))
+        if mo and 1 <= int(m.group(1)) <= 31:
+            day, month = int(m.group(1)), mo
+            ym = re.search(r"\b(20\d{2})\b", t[m.end() : m.end() + 22])
+            if ym:
+                explicit_year = int(ym.group(1))
+            break
+
+    # 2) "25.09" / "25.09.2026"
+    if day is None:
+        m = re.search(r"\b(\d{1,2})[./](\d{1,2})(?:[./](20\d{2}|\d{2}))?\b", t)
+        if m:
+            d, mo = int(m.group(1)), int(m.group(2))
+            if 1 <= d <= 31 and 1 <= mo <= 12:
+                day, month = d, mo
+                if m.group(3):
+                    y = int(m.group(3))
+                    explicit_year = y + 2000 if y < 100 else y
+
+    if day is None or month is None:
+        return None
+
+    year = explicit_year or now.year
+    try:
+        dt = datetime(year, month, day)
+    except ValueError:
+        return None
+
+    # Yil chegarasi: faqat yil ANIQ ko'rsatilmagan bo'lsa (dekabrda yanvar
+    # tadbiri keyingi yilga tegishli bo'ladi).
+    if explicit_year is None and (now - dt).days > 300:
+        try:
+            dt = datetime(year + 1, month, day)
+        except ValueError:
+            return None
+
+    tm = re.search(r"\b(\d{1,2}):(\d{2})\b", t)
+    if tm and int(tm.group(1)) < 24:
+        dt = dt.replace(hour=int(tm.group(1)), minute=int(tm.group(2)))
+    return dt
+
+
+def event_priority(ev: dict) -> tuple[int, float]:
+    """Ustuvorlik balli: eng to'liq va eng aniq tadbir birinchi chiqadi.
+
+    Saralash tartibi (kamayish bo'yicha):
+      aniq kelgusi sana > sana + soat > joy > to'liq nom > AI > tavsif
+    """
+    score = 0
+    at = ev.get("_at")
+    if isinstance(at, datetime):
+        score += 40
+        if at.hour or at.minute:
+            score += 10  # soati ham bor — juda aniq
+    if (ev.get("place") or "").strip():
+        score += 15
+    name = (ev.get("name") or "").strip()
+    if len(name) >= 12:
+        score += 10
+    if ev.get("by_ai"):
+        score += 10
+    if (ev.get("purpose") or "").strip():
+        score += 5
+    # Sanasiz tadbirlar teng ball holatida ham pastda qolsin
+    return score, -(at.timestamp() if isinstance(at, datetime) else float("-inf"))
+
+
 def _matches_event(text_low: str, keywords: list[str]) -> bool:
     """Haqiqiy tadbir E'LONI bo'lsa True.
 
@@ -730,19 +826,48 @@ async def scan_folder(
             log.warning("Kanal %s xabarlarini o'qishda xato: %s: %s", title, type(e).__name__, e)
             continue
 
-    # Xronologik tartib: yaqinlashib kelayotgan (yangi) tadbirlar tepada
-    events.sort(key=lambda e: e.get("msg_date") or "", reverse=True)
-
-    # AI bilan aniqlashtirish (imkoni bo'lsa) — bepul evristik natijani yaxshilaydi
+    # AI bilan aniqlashtirish (imkoni bo'lsa) — bepul evristik natijani yaxshilaydi.
+    # Saralashdan OLDIN qilinadi: AI aniqroq "when" bergani uchun sana tahlili
+    # va ustuvorlik to'g'ri hisoblanadi.
     refined = await _ai_refine(events, account_id)
     if refined:
         events = refined
+
+    # ---- Sana tahlili: o'tib bo'lgan tadbirlar olib tashlanadi ----
+    # Foydalanuvchi faqat KELGUSI tadbirlarni ko'rishi kerak; postda sana
+    # bo'lmasa (aniqlab bo'lmasa) tadbir qoldiriladi, lekin pastroq turadi.
+    now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+    kept: list[dict] = []
+    dropped_past = 0
+    for ev in events:
+        at = parse_event_date(ev.get("when") or "", now_naive)
+        if at is None:
+            at = parse_event_date(ev.get("text") or "", now_naive)
+        ev["_at"] = at
+        ev["event_at"] = at.isoformat() if at else None
+        if at is not None and at < now_naive:
+            dropped_past += 1  # tadbir allaqachon o'tib bo'lgan
+            continue
+        kept.append(ev)
+
+    # ---- Ustuvorlik bo'yicha saralash: eng aniq/to'liq tadbir birinchi ----
+    kept.sort(key=event_priority, reverse=True)
+    log.info(
+        "Skaner: %d ta tadbir, %d tasi o'tib bo'lgani uchun tashlandi",
+        len(kept),
+        dropped_past,
+    )
+    events = kept
+
+    for ev in events:
+        ev.pop("_at", None)
 
     return {
         "events": events,
         "scanned": scanned,
         "folder_title": _folder_title(getattr(folder, "title", "")),
         "days": days,
+        "dropped_past": dropped_past,
     }
 
 
@@ -779,7 +904,7 @@ async def persist_events(
 
     async with SessionLocal() as db:
         await db.execute(delete(EventItem).where(EventItem.account_id == account_id))
-        for ev in events:
+        for idx, ev in enumerate(events, start=1):
             db.add(
                 EventItem(
                     account_id=account_id,
@@ -788,6 +913,8 @@ async def persist_events(
                     source_kind=ev.get("source_kind", "channel"),
                     msg_tg_id=int(ev.get("msg_tg_id", 0)),
                     msg_date=_parse(ev.get("msg_date")),
+                    event_at=_parse(ev.get("event_at")),
+                    rank=idx,
                     name=ev.get("name", "")[:255],
                     purpose=ev.get("purpose", ""),
                     when_=ev.get("when", "")[:255],

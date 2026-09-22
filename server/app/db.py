@@ -297,6 +297,13 @@ class EventItem(Base):
     place: Mapped[str] = mapped_column(String(255), default="")  # o'tkaziladigan joyi
     text: Mapped[str] = mapped_column(Text, default="")  # asl xabar matni
     by_ai: Mapped[bool] = mapped_column(Boolean, default=False)  # AI tomonidan aniqlashtirilganmi
+    # Tahlil qilingan tadbir sanasi (agar matndan aniqlansa). O'tib bo'lgan
+    # tadbirlarni filtrlash va yaqinlashish tartibida saralash uchun.
+    event_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Skaner hisoblagan ustuvorlik tartibi (1 = eng aniq/to'liq tadbir).
+    # API shu ustun bo'yicha saralaydi — aks holda msg_date bo'yicha qayta
+    # tartiblab, ustuvorlik buzilardi.
+    rank: Mapped[int] = mapped_column(Integer, default=0, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

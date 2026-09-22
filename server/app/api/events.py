@@ -44,6 +44,7 @@ def _serialize_event(e: EventItem) -> dict:
         "msg_tg_id": e.msg_tg_id,
         "msg_date": e.msg_date.isoformat() if e.msg_date else None,
         "by_ai": e.by_ai,
+        "event_at": e.event_at.isoformat() if e.event_at else None,
     }
 
 
@@ -164,7 +165,10 @@ async def list_events(
     acc_id = await resolve_account_id(token_account, account_id, db)
     rows = (
         await db.execute(
-            select(EventItem).where(EventItem.account_id == acc_id).order_by(EventItem.msg_date.desc().nullslast())
+            select(EventItem)
+            .where(EventItem.account_id == acc_id)
+            # Ustuvorlik tartibi saqlanadi (1 = eng aniq/to'liq, yaqin sana avval)
+            .order_by(EventItem.rank.asc(), EventItem.msg_date.desc().nullslast())
         )
     ).scalars().all()
     config = (
