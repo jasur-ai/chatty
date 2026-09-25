@@ -72,6 +72,11 @@ class ForwardRuleIn(BaseModel):
 class PollIn(DialogActionIn):
     question: str
     options: list[str]
+    anonymous: bool = False
+    multiple_choice: bool = False
+    quiz: bool = False
+    correct_option: int = 0
+    close_period: int = 0
 
 
 class StickerIn(DialogActionIn):
@@ -318,7 +323,17 @@ async def poll(body: PollIn, token_account: int = Depends(require_account), db=D
     await require_vip(token_account, db)
     acc = await resolve_account_id(token_account, body.account_id, db)
     try:
-        return await actions.create_poll(acc, body.dialog_id, body.question, body.options)
+        return await actions.create_poll(
+            acc,
+            body.dialog_id,
+            body.question,
+            body.options,
+            anonymous=body.anonymous,
+            multiple_choice=body.multiple_choice,
+            quiz=body.quiz,
+            correct_option=body.correct_option,
+            close_period=body.close_period,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -434,5 +449,89 @@ async def channel_post(body: ChannelPostIn, token_account: int = Depends(require
         send_at = send_at.replace(tzinfo=_tz.utc)
     try:
         return await actions.schedule_channel_post(acc, body.dialog_id, body.text, send_at, body.silent)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+# ===================================================================
+# Guruh / kanal boshqaruvi — kengaytirilgan
+# ===================================================================
+class TagAllIn(BaseModel):
+    account_id: int | None = None
+    dialog_id: int
+    text: str = ""
+    preview: bool = False
+    limit: int = 500
+
+
+class InviteLinkIn(BaseModel):
+    account_id: int | None = None
+    dialog_id: int
+    action: str = "create"  # create | revoke
+    expire_hours: int = 0
+    usage_limit: int = 0
+
+
+class BroadcastIn(BaseModel):
+    account_id: int | None = None
+    text: str
+    only_kind: str = ""  # "" | group | channel
+    limit_dialogs: int = 30
+
+
+@router.get("/admins/{dialog_id}")
+async def group_admins(
+    dialog_id: int,
+    account_id: int | None = Query(default=None),
+    token_account: int = Depends(require_account),
+    db=Depends(get_session),
+):
+    """Guruh/kanal adminlari ro'yxati."""
+    await require_vip(token_account, db)
+    acc = await resolve_account_id(token_account, account_id, db)
+    try:
+        return await actions.group_admins(acc, dialog_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/tag-all")
+async def tag_all(body: TagAllIn, token_account: int = Depends(require_account), db=Depends(get_session)):
+    """Guruhdagi barcha @username'larni xabarga teg qiladi (bo'laklarga bo'lib).
+
+    preview=True — hech narsa yuborilmaydi, faqat reja qaytadi.
+    """
+    await require_vip(token_account, db)
+    acc = await resolve_account_id(token_account, body.account_id, db)
+    try:
+        return await actions.tag_all_usernames(
+            acc, body.dialog_id, body.text, preview=body.preview, limit=body.limit
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/invite-link")
+async def invite_link(body: InviteLinkIn, token_account: int = Depends(require_account), db=Depends(get_session)):
+    """Taklif havolasini yaratish/bekor qilish."""
+    await require_vip(token_account, db)
+    acc = await resolve_account_id(token_account, body.account_id, db)
+    try:
+        return await actions.group_invite_link(
+            acc, body.dialog_id, body.action, body.expire_hours, body.usage_limit
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/broadcast")
+async def broadcast(body: BroadcastIn, token_account: int = Depends(require_account), db=Depends(get_session)):
+    """Akkaunt admin bo'lgan barcha guruh/kanallarga ommaviy xabar."""
+    await require_vip(token_account, db)
+    acc = await resolve_account_id(token_account, body.account_id, db)
+    try:
+        return await actions.broadcast_to_admin_chats(
+            acc, body.text, body.only_kind, body.limit_dialogs
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

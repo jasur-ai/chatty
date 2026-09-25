@@ -224,3 +224,53 @@ export interface EventsConfig {
   extra_keywords: string;
   last_scan_at: string | null;
 }
+// ---- Guruh / kanal boshqaruvi (admin) ----
+export interface GroupAdmin {
+  id: number;
+  first_name: string;
+  last_name: string;
+  username: string | null;
+  is_creator: boolean;
+  bot: boolean;
+  rank: string | null;
+  can_edit: boolean;
+  promoted_by: number | null;
+  rights: Record<string, boolean>;
+}
+
+export interface GroupAdmins {
+  admins: GroupAdmin[];
+  creator: { id: number; first_name: string; username: string | null } | null;
+  count: number;
+  kind: string;
+  peer_type: string;
+  title: string;
+  total_members: number | null;
+}
+
+export interface TagAllResult {
+  ok: boolean;
+  preview?: boolean;
+  total_members: number;
+  with_username: number;
+  messages?: number;
+  messages_sent?: number;
+  chunks?: string[];
+}
+
+export interface InviteLinkResult {
+  ok: boolean;
+  revoked: boolean;
+  link: string | null;
+  expires?: string | null;
+  usage_limit?: number | null;
+  requested?: boolean;
+}
+
+export interface BroadcastResult {
+  ok: boolean;
+  sent: number;
+  failed: number;
+  total: number;
+  details?: { title: string; ok: boolean; error?: string }[];
+}

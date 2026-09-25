@@ -13,6 +13,10 @@ import type {
   EventsScanResult,
   EventItem,
   ForwardRule,
+  GroupAdmins,
+  BroadcastResult,
+  InviteLinkResult,
+  TagAllResult,
   LoginResult,
   Message,
   MusicPost,
@@ -438,8 +442,28 @@ export const api = {
   vipProfile: (accountId: number, body: { first_name?: string; bio?: string; username?: string }, token: string) =>
     req<{ ok: boolean }>("/api/vip/profile", { method: "POST", body: JSON.stringify({ account_id: accountId, ...body }) }, token),
 
-  vipPoll: (accountId: number, dialogId: number, question: string, options: string[], token: string) =>
-    req<{ ok: boolean }>("/api/vip/poll", { method: "POST", body: JSON.stringify({ account_id: accountId, dialog_id: dialogId, question, options }) }, token),
+  vipPoll: (
+    accountId: number,
+    dialogId: number,
+    question: string,
+    options: string[],
+    token: string,
+    extra?: { anonymous?: boolean; multiple_choice?: boolean; quiz?: boolean; correct_option?: number; close_period?: number },
+  ) =>
+    req<{ ok: boolean; tg_id: number }>("/api/vip/poll", { method: "POST", body: JSON.stringify({ account_id: accountId, dialog_id: dialogId, question, options, ...(extra || {}) }) }, token, 60000),
+
+  // ---- Guruh / kanal boshqaruvi (admin) ----
+  vipAdmins: (accountId: number, dialogId: number, token: string) =>
+    req<GroupAdmins>(`/api/vip/admins/${dialogId}?account_id=${accountId}`, {}, token, 60000),
+
+  vipTagAll: (accountId: number, body: { dialog_id: number; text?: string; preview?: boolean; limit?: number }, token: string) =>
+    req<TagAllResult>("/api/vip/tag-all", { method: "POST", body: JSON.stringify({ account_id: accountId, ...body }) }, token, 300000),
+
+  vipInviteLink: (accountId: number, body: { dialog_id: number; action?: string; expire_hours?: number; usage_limit?: number }, token: string) =>
+    req<InviteLinkResult>("/api/vip/invite-link", { method: "POST", body: JSON.stringify({ account_id: accountId, ...body }) }, token, 60000),
+
+  vipBroadcast: (accountId: number, body: { text: string; only_kind?: string; limit_dialogs?: number }, token: string) =>
+    req<BroadcastResult>("/api/vip/broadcast", { method: "POST", body: JSON.stringify({ account_id: accountId, ...body }) }, token, 300000),
 
   vipSticker: (accountId: number, dialogId: number, emoji: string, token: string) =>
     req<{ ok: boolean }>("/api/vip/sticker", { method: "POST", body: JSON.stringify({ account_id: accountId, dialog_id: dialogId, emoji }) }, token),

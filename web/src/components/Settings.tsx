@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { GroupAdminPanel } from "./GroupAdminPanel";
 import {
   IconBot,
   IconCrown,
+  IconGroup,
   IconImage,
   IconMic,
   IconMusic,
@@ -30,7 +32,7 @@ import type {
 import { Avatar } from "./Avatar";
 import { resolveUrl } from "../env";
 
-type Tab = "bot" | "auto" | "pro" | "lotus" | "music" | "vip" | "admin";
+type Tab = "bot" | "auto" | "pro" | "lotus" | "music" | "vip" | "group" | "admin";
 
 export function Settings() {
   const { current, token, appUser, closeSettings } = useStore();
@@ -67,6 +69,7 @@ export function Settings() {
             <>
               <div className="nav-group-label">VIP</div>
               <NavBtn icon={<IconCrown size={20} />} label="VIP funksiyalar" active={tab === "vip"} onClick={() => setTab("vip")} />
+              <NavBtn icon={<IconGroup size={20} />} label="Guruh boshqaruvi" active={tab === "group"} onClick={() => setTab("group")} />
             </>
           )}
           {isAdmin && (
@@ -94,6 +97,7 @@ export function Settings() {
             {tab === "lotus" && <LotusTab />}
             {tab === "music" && <MusicTab />}
             {tab === "vip" && isVip && <VipTab />}
+            {tab === "group" && isVip && <GroupTab />}
             {tab === "admin" && isAdmin && <AdminTab />}
           </div>
         </div>
@@ -109,6 +113,7 @@ const TAB_TITLES: Record<Tab, string> = {
   lotus: "Lotus AI",
   music: "Musiqa",
   vip: "VIP funksiyalar",
+  group: "Guruh boshqaruvi",
   admin: "Admin panel",
 };
 
@@ -626,6 +631,12 @@ function MusicTab() {
 }
 
 // ---------------- VIP (20 mustaqil funksiya) ----------------
+function GroupTab() {
+  const { current, token, dialogs } = useStore();
+  if (!current || !token) return <div className="pane"><div className="muted">Akkaunt ulanmagan</div></div>;
+  return <GroupAdminPanel accountId={current.id} token={token} dialogs={dialogs} />;
+}
+
 function VipTab() {
   const { current, token, dialogs } = useStore();
   const [accent, setAccent] = useState("#3390ec");

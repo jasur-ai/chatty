@@ -733,9 +733,64 @@ async def send_sticker(account_id: int, dialog_id: int, sticker_id: int | None =
     return {"ok": True, "tg_id": sent.id}
 
 
-async def create_poll(account_id: int, dialog_id: int, question: str, options: list[str]) -> dict:
-    """So'rov (poll) yaratish."""
+async def create_poll(
+    account_id: int,
+    dialog_id: int,
+    question: str,
+    options: list[str],
+    anonymous: bool = False,
+    multiple_choice: bool = False,
+    quiz: bool = False,
+    correct_option: int = 0,
+    close_period: int = 0,
+) -> dict:
+    """Haqiqiy Telegram so'rovnomasini (poll) yuboradi.
+
+    anonymous       — ovoz beruvchilar ko'rinmasin
+    multiple_choice — bir nechta variantni belgilash mumkin
+    quiz            — viktorina rejimi (to'g'ri javob bitta)
+    correct_option  — quiz uchun to'g'ri javob indeksi (0 dan)
+    close_period    — necha soniyadan keyin avtomatik yopilsin (5..600)
+    """
+    import random
+
+    from telethon.tl.types import InputMediaPoll, Poll, PollAnswer, TextWithEntities
+
     client = await _require_client(account_id)
+
+    opts = [str(o).strip() for o in (options or []) if str(o).strip()][:10]
+    if len(opts) < 2:
+        raise ValueError("So'rovnoma uchun kamida 2 ta javob varianti kerak")
+    if len(opts) > 10:
+        raise ValueError("Ko'pi bilan 10 ta javob varianti mumkin")
+    q = (question or "").strip()
+    if not q:
+        raise ValueError("So'rovnoma savoli bo'sh bo'lmasligi kerak")
+
+    answers = [
+        PollAnswer(text=TextWithEntities(text=o[:100], entities=[]), option=bytes([i]))
+        for i, o in enumerate(opts)
+    ]
+    cp = None
+    if close_period:
+        cp = min(max(int(close_period), 5), 600)
+    poll = Poll(
+        id=random.getrandbits(62),
+        question=TextWithEntities(text=q[:300], entities=[]),
+        answers=answers,
+        hash=random.getrandbits(31),
+        closed=False,
+        public_voters=not anonymous,
+        multiple_choice=bool(multiple_choice),
+        quiz=bool(quiz),
+        close_period=cp,
+    )
+    # Viktorina to'g'ri javobi InputMediaPoll.correct_answers orqali beriladi.
+    media = InputMediaPoll(
+        poll=poll,
+        correct_answers=[int(correct_option)] if quiz and 0 <= int(correct_option) < len(opts) else None,
+    )
+
     async with SessionLocal() as db:
         dialog = (
             await db.execute(select(Dialog).where(Dialog.id == dialog_id, Dialog.account_id == account_id))
@@ -743,19 +798,24 @@ async def create_poll(account_id: int, dialog_id: int, question: str, options: l
         if dialog is None:
             raise ValueError("Dialog topilmadi")
         entity = await client.get_entity(input_peer(dialog.tg_id, dialog.peer_type))
-        sent = await client.send_message(entity, file=None)
         try:
-            from telethon.tl.types import Poll, PollAnswer
-
-            msg = await client.send_message(
-                entity,
-                question,
-            )
-            # Soddalashtirilgan: text orqali yuboramiz (poll API murakkab)
-            sent = msg
-        except Exception:
-            raise ValueError("So'rov yaratib bo'lmadi") from None
-    return {"ok": True, "tg_id": sent.id}
+            sent = await client.send_file(entity, media)
+        except Exception as exc:
+            log.warning("create_poll failed: %s: %s", type(exc).__name__, exc)
+            raise ValueError(
+                "So'rovnoma yuborib bo'lmadi: "
+                + ("guruhda xabar yozish huquqi yo'q" if "RIGHT" in str(exc).upper() else str(exc))
+            ) from None
+    return {
+        "ok": True,
+        "tg_id": sent.id,
+        "question": q,
+        "options": opts,
+        "anonymous": anonymous,
+        "multiple_choice": multiple_choice,
+        "quiz": quiz,
+        "close_period": cp,
+    }
 
 
 async def media_gallery(account_id: int, dialog_id: int, limit: int = 100) -> list[dict]:
@@ -854,9 +914,56 @@ async def group_manage(account_id: int, dialog_id: int, user_id: int, action: st
             await client.edit_admin(entity, user_id, title=title or "")
         elif action == "rename":
             await client.edit_title(entity, title or "")
+        # ---- yangi amallar ----
+        elif action == "set_about":
+            # Guruh/kanal tavsifi. Telethon'da bitta funksiya ikkalasiga ham
+            # ishlaydi: messages.EditChatAboutRequest(peer, about).
+            from telethon.tl.functions.messages import EditChatAboutRequest
+
+            peer = await client.get_input_entity(entity)
+            await client(EditChatAboutRequest(peer=peer, about=(title or "")[:512]))
+        elif action == "slowmode":
+            secs = int(title or 0) if str(title or "").isdigit() else 0
+            await _set_slowmode(client, entity, secs)
+        elif action == "restrict":
+            # title = vergul bilan ajratilgan cheklovlar: "media,stickers,preview"
+            flags = {f.strip().lower() for f in (title or "").split(",") if f.strip()}
+            await client.edit_permissions(
+                entity,
+                user_id,
+                send_media="media" not in flags,
+                send_stickers="stickers" not in flags,
+                send_gifs="stickers" not in flags,
+                embed_links="preview" not in flags,
+            )
+        elif action == "mute":
+            # title = soatlar soni (default 24)
+            hours = float(title or 24)
+            until = datetime.now(timezone.utc) + timedelta(hours=hours)
+            await client.edit_permissions(entity, user_id, until_date=until, send_messages=False)
+        elif action == "unmute":
+            await client.edit_permissions(entity, user_id, send_messages=True)
+        elif action == "delete_user_msgs":
+            n = int(title or 20) if str(title or "").isdigit() else 20
+            ids = []
+            async for m in client.iter_messages(entity, limit=500, from_user=user_id):
+                ids.append(m.id)
+                if len(ids) >= n:
+                    break
+            if ids:
+                await client.delete_messages(entity, ids)
+            return {"ok": True, "deleted": len(ids)}
         else:
             raise ValueError("Noto'g'ri amal")
     return {"ok": True}
+
+
+async def _set_slowmode(client, entity, seconds: int) -> None:
+    """Sekin rejim (faqat megaguruh/kanallar uchun)."""
+    from telethon.tl.functions.channels import ToggleSlowModeRequest
+
+    peer = await client.get_input_entity(entity)
+    await client(ToggleSlowModeRequest(peer, max(0, min(seconds, 3600))))
 
 
 async def group_members(account_id: int, dialog_id: int, limit: int = 200) -> list[dict]:
@@ -959,3 +1066,277 @@ async def backup_chats(account_id: int) -> dict:
         "truncated": truncated,
         "total_dialogs": len(dialogs),
     }
+
+# ===================================================================
+# Guruh / kanal boshqaruvi (admin huquqlari talab qilinadi)
+# ===================================================================
+TAG_CHUNK = 50  # Telegram bitta xabarda ~50 ta @username'ni ko'taradi
+TAG_DELAY = 4.0  # xabarlar orasidagi pauza (spam filtri urilmasligi uchun)
+
+
+async def _resolve_dialog(client, db, account_id: int, dialog_id: int):
+    dialog = (
+        await db.execute(select(Dialog).where(Dialog.id == dialog_id, Dialog.account_id == account_id))
+    ).scalar_one_or_none()
+    if dialog is None:
+        raise ValueError("Dialog topilmadi")
+    entity = await client.get_entity(input_peer(dialog.tg_id, dialog.peer_type))
+    return dialog, entity
+
+
+async def _require_admin_rights(client, entity) -> None:
+    """Akkaunt shu guruh/kanalda admin ekanini tekshiradi.
+
+    Admin bo'lmasa Telegram xatosi chiqadi — foydalanuvchiga tushunarli
+    xabar qaytarish uchun oldindan tekshiramiz.
+    """
+    from telethon.tl.functions.channels import GetParticipantRequest
+
+    try:
+        me = await client.get_me()
+        part = await client(GetParticipantRequest(channel=entity, participant=me))
+    except Exception as e:  # noqa: BLE001 — oddiy guruh (chat) bo'lsa admin tekshirilmaydi
+        log.debug("Admin tekshiruvi o'tkazib yuborildi: %s", e)
+        return
+    rights = getattr(getattr(part, "participant", None), "admin_rights", None)
+    if rights is None:
+        raise ValueError("Bu guruh/kanalda akkaunt admin emas. Avval admin qiling.")
+
+
+_RIGHT_KEYS = (
+    "change_info",
+    "post_messages",
+    "edit_messages",
+    "delete_messages",
+    "ban_users",
+    "invite_users",
+    "pin_messages",
+    "add_admins",
+    "anonymous",
+    "manage_call",
+    "manage_topics",
+)
+
+
+async def group_admins(account_id: int, dialog_id: int) -> dict:
+    """Guruh/kanal adminlari, ularning lavozimi (rank) va huquqlari.
+
+    `get_participants(filter=ChannelParticipantsAdmins())` User obyektini
+    qaytaradi va har biriga `.participant` biriktirilgan:
+    ChannelParticipantCreator (egasi) yoki ChannelParticipantAdmin.
+    """
+    from telethon.tl.types import (
+        ChannelParticipantCreator,
+        ChannelParticipantsAdmins,
+        InputPeerSelf,
+    )
+
+    client = await _require_client(account_id)
+    async with SessionLocal() as db:
+        dialog, entity = await _resolve_dialog(client, db, account_id, dialog_id)
+        participants = await client.get_participants(entity, filter=ChannelParticipantsAdmins())
+
+    admins = []
+    creator = None
+    for p in participants:
+        part = getattr(p, "participant", None)
+        is_creator = isinstance(part, ChannelParticipantCreator)
+        rights_obj = getattr(part, "admin_rights", None)
+        rights = {k: bool(getattr(rights_obj, k, False)) for k in _RIGHT_KEYS}
+        entry = {
+            "id": int(p.id),
+            "first_name": getattr(p, "first_name", "") or "",
+            "last_name": getattr(p, "last_name", "") or "",
+            "username": getattr(p, "username", None),
+            "is_creator": is_creator,
+            "bot": bool(getattr(p, "bot", False)),
+            "rank": getattr(part, "rank", None),
+            "can_edit": bool(getattr(part, "can_edit", False)),
+            "promoted_by": getattr(part, "promoted_by", None),
+            "rights": rights,
+        }
+        admins.append(entry)
+        if is_creator and creator is None:
+            creator = {
+                "id": entry["id"],
+                "first_name": entry["first_name"],
+                "username": entry["username"],
+            }
+
+    # Egasi admin ro'yxatida ko'rinmasa ham uni alohida topib beramiz.
+    if creator is None:
+        try:
+            me = await client(
+                functions.channels.GetParticipantRequest(
+                    channel=entity, participant=InputPeerSelf()
+                )
+            )
+            if isinstance(me.participant, ChannelParticipantCreator):
+                u = me.users[0] if getattr(me, "users", None) else None
+                creator = {
+                    "id": int(u.id) if u else int(me.participant.user_id),
+                    "first_name": (getattr(u, "first_name", "") if u else "") or "",
+                    "username": getattr(u, "username", None) if u else None,
+                }
+        except Exception as exc:
+            log.debug("group_admins creator lookup failed: %s", exc)
+
+    total = getattr(entity, "participants_count", None)
+    if not total:
+        # participants_count ba'zida None keladi; limit=0 umumiy sonni beradi.
+        try:
+            total = await client.get_participants(entity, limit=0)
+        except Exception as exc:
+            log.debug("group_admins member count failed: %s", exc)
+    return {
+        "admins": admins,
+        "creator": creator,
+        "count": len(admins),
+        "kind": dialog.kind or dialog.peer_type,
+        "peer_type": dialog.peer_type,
+        "title": dialog.title,
+        "total_members": total,
+    }
+
+
+async def tag_all_usernames(
+    account_id: int,
+    dialog_id: int,
+    text: str = "",
+    preview: bool = False,
+    limit: int = 500,
+) -> dict:
+    """Guruhdagi barcha @username'larni xabarga teg qilib yuboradi.
+
+    Telegram bitta xabarda ko'p mention'ni ko'tarmaydi, shuning uchun
+    50 talik bo'laklarga bo'linadi va orasida pauza qo'yiladi.
+    preview=True bo'lsa hech narsa yuborilmaydi (faqat reja qaytadi) —
+    xavfsiz tekshirish uchun.
+    """
+    client = await _require_client(account_id)
+    async with SessionLocal() as db:
+        dialog, entity = await _resolve_dialog(client, db, account_id, dialog_id)
+        await _require_admin_rights(client, entity)
+        participants = await client.get_participants(entity, limit=limit)
+
+    usernames = [
+        u for u in (getattr(p, "username", None) for p in participants) if u
+    ]
+    # dublikatlarni saqlagan holda takrorlanishni olamiz
+    seen, uniq = set(), []
+    for u in usernames:
+        if u.lower() not in seen:
+            seen.add(u.lower())
+            uniq.append(u)
+
+    chunks = [uniq[i : i + TAG_CHUNK] for i in range(0, len(uniq), TAG_CHUNK)]
+    header = (text or "").strip()
+
+    if preview:
+        return {
+            "ok": True,
+            "preview": True,
+            "total_members": len(participants),
+            "with_username": len(uniq),
+            "messages": len(chunks),
+            "chunks": [" ".join(f"@{u}" for u in c[:5]) + (" …" if len(c) > 5 else "") for c in chunks],
+        }
+
+    sent = 0
+    for i, chunk in enumerate(chunks):
+        mentions = " ".join(f"@{u}" for u in chunk)
+        body = f"{header}\n\n{mentions}" if (header and i == 0) else (header if i == 0 else mentions)
+        await client.send_message(entity, body[:4000])
+        sent += 1
+        if i < len(chunks) - 1:
+            await asyncio.sleep(TAG_DELAY)
+
+    return {
+        "ok": True,
+        "total_members": len(participants),
+        "with_username": len(uniq),
+        "messages_sent": sent,
+    }
+
+
+async def group_invite_link(
+    account_id: int, dialog_id: int, action: str = "create", expire_hours: int = 0, usage_limit: int = 0
+) -> dict:
+    """Taklif havolasini yaratish yoki bekor qilish."""
+    client = await _require_client(account_id)
+    async with SessionLocal() as db:
+        dialog, entity = await _resolve_dialog(client, db, account_id, dialog_id)
+        await _require_admin_rights(client, entity)
+        peer = await client.get_input_entity(entity)
+
+        if action == "revoke":
+            res = await client(
+                functions.messages.ExportChatInviteRequest(
+                    peer=peer, legacy_revoke_permanent=True, request_needed=False
+                )
+            )
+            return {"ok": True, "revoked": True, "link": getattr(res, "link", None)}
+
+        kwargs = {}
+        if expire_hours > 0:
+            kwargs["expire_date"] = datetime.now(timezone.utc) + timedelta(hours=expire_hours)
+        if usage_limit > 0:
+            kwargs["usage_limit"] = usage_limit
+        res = await client(
+            functions.messages.ExportChatInviteRequest(
+                peer=peer, legacy_revoke_permanent=False, request_needed=False, **kwargs
+            )
+        )
+        exp = getattr(res, "expire_date", None)
+        return {
+            "ok": True,
+            "revoked": False,
+            "link": getattr(res, "link", None),
+            "expires": exp.isoformat() if exp is not None else None,
+            "usage_limit": getattr(res, "usage_limit", None),
+            "requested": bool(getattr(res, "request_needed", False)),
+        }
+
+
+async def broadcast_to_admin_chats(
+    account_id: int, text: str, only_kind: str = "", limit_dialogs: int = 30
+) -> dict:
+    """Akkaunt ADMIN bo'lgan barcha guruh/kanallarga bir xil xabar yuboradi.
+
+    only_kind: "" (hammasi) | "group" | "channel"
+    """
+    client = await _require_client(account_id)
+    if not (text or "").strip():
+        raise ValueError("Xabar matni bo'sh")
+
+    async with SessionLocal() as db:
+        rows = (
+            await db.execute(
+                select(Dialog).where(Dialog.account_id == account_id).order_by(
+                    Dialog.pinned.desc(), Dialog.last_msg_date.desc().nullslast()
+                )
+            )
+        ).scalars().all()
+
+    sent, skipped, errors = 0, 0, []
+    for d in rows:
+        if only_kind and d.peer_type != only_kind:
+            continue
+        if sent >= limit_dialogs:
+            break
+        try:
+            entity = await client.get_entity(input_peer(d.tg_id, d.peer_type))
+            await _require_admin_rights(client, entity)
+        except ValueError:
+            skipped += 1  # admin emasmiz — o'tkazamiz
+            continue
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"{d.title}: {e}")
+            continue
+        try:
+            await client.send_message(entity, text[:4000])
+            sent += 1
+            await asyncio.sleep(2.5)  # spam filtri urilmasligi uchun
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"{d.title}: {e}")
+    return {"ok": True, "sent": sent, "skipped_not_admin": skipped, "errors": errors[:10]}

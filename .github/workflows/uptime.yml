@@ -1,13 +1,18 @@
 name: Uptime — Chatty'ni uyg'oq saqlash
 
-# Render free tarif ~15 daqiqa harakatsizlikdan keyin serverni uxlatadi,
-# shunda ilova ochilganda 30-60 soniya "yuklanmayotgandek" ko'rinadi.
-# Shuning uchun har 5 daqiqada /api/health ga so'rov yuborib, serverni
-# doim uyg'oq saqlaymiz (repo public bo'lgani uchun Actions daqiqalari bepul).
+# DIQQAT: avval bu workflow har 5 daqiqada serverni ping qilib, uni 24/7
+# uyg'oq ushlab turardi. Natijada Render bepul tarifidagi 750 soatlik kvota
+# tez tugab, servis "billing" sababli to'xtatildi (suspended).
+#
+# Shuning uchun AVTOMATIK JADVAL O'CHIRILDI. Ilova sovuq startda
+# "Server uyg'onmoqda…" izohini ko'rsatadi (App.tsx) — bu yetarli.
+#
+# Agar pulli tarifga o'tsangiz, quyidagi `schedule` qatorini ochib qo'ying:
+#   on:
+#     schedule:
+#       - cron: "*/5 * * * *"
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -27,7 +32,5 @@ jobs:
             fi
             sleep 5
           done
-          # So'nggi urinish muvaffaqiyatsiz bo'lsa ham workflow'ni xato bilan
-          # tugatmaymiz (keyingi 5 daqiqada qayta uriniladi).
           echo "oxirgi urinish muvaffaqiyatsiz"
           exit 0
