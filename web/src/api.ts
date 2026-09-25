@@ -50,6 +50,45 @@ export function dropToken(accountId: number) {
 
 /** Server xatoligini har doim o'qiladigan matnga aylantiradi
  *  (FastAPI 422 da `detail` array bo'ladi — aks holda "[object Object]" chiqadi). */
+/** Maydon nomini odam o'qiy oladigan ko'rinishga keltirish. */
+function humanField(loc: unknown[]): string {
+  const last = loc.filter((x) => x !== "body" && x !== "query" && x !== "path");
+  const name = String(last[last.length - 1] ?? "");
+  return (
+    {
+      dialog_id: "Chat",
+      account_id: "Akkaunt",
+      user_id: "Foydalanuvchi",
+      msg_tg_id: "Xabar",
+      text: "Matn",
+      title: "Sarlavha",
+      question: "Savol",
+      options: "Javob variantlari",
+      phone: "Telefon raqami",
+      code: "Tasdiqlash kodi",
+      password: "Parol",
+      folder_id: "Papka",
+      days: "Kunlar soni",
+      action: "Amal",
+    }[name] || name
+  );
+}
+
+/** FastAPI validatsiya xabarlarini o'zbekchaga tarjima qilish. */
+function translateValidation(msg: string): string {
+  const m = msg.toLowerCase();
+  if (m.includes("field required") || m.includes("missing")) return "to'ldirilishi shart";
+  if (m.includes("valid integer") || m.includes("int_parsing")) return "raqam bo'lishi kerak";
+  if (m.includes("valid number") || m.includes("float_parsing")) return "son bo'lishi kerak";
+  if (m.includes("valid boolean")) return "ha/yo'q qiymati bo'lishi kerak";
+  if (m.includes("at least") && m.includes("character")) return "juda qisqa";
+  if (m.includes("at most") && m.includes("character")) return "juda uzun";
+  if (m.includes("valid list")) return "ro'yxat bo'lishi kerak";
+  if (m.includes("greater than")) return "kattaroq qiymat kiriting";
+  if (m.includes("less than")) return "kichikroq qiymat kiriting";
+  return msg;
+}
+
 function detailToMessage(detail: unknown): string {
   if (detail == null) return "Noma'lum xato";
   if (typeof detail === "string") return detail;
@@ -60,17 +99,20 @@ function detailToMessage(detail: unknown): string {
         if (d && typeof d === "object") {
           const o = d as { msg?: string; loc?: unknown[] };
           if (o.msg) {
-            const loc = Array.isArray(o.loc) ? o.loc.join(".") : "";
-            return loc ? `${loc}: ${o.msg}` : o.msg;
+            const field = Array.isArray(o.loc) ? humanField(o.loc) : "";
+            const why = translateValidation(o.msg);
+            return field ? `${field}: ${why}` : why;
           }
         }
         return "";
       })
       .filter(Boolean);
-    return parts.join("; ") || "Noma'lum xato";
+    return parts.join("; ") || "Ma'lumotlar noto'g'ri kiritildi";
   }
   if (typeof detail === "object") {
-    return JSON.stringify(detail);
+    // Xom JSON'ni foydalanuvchiga ko'rsatmaymiz — ma'noli maydonni olamiz.
+    const o = detail as { detail?: string; message?: string; error?: string };
+    return o.detail || o.message || o.error || "So'rovni bajarib bo'lmadi";
   }
   return String(detail);
 }

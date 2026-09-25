@@ -2685,3 +2685,122 @@ textarea {
   color: var(--text);
   word-break: break-all;
 }
+
+/* ============================================================
+   Chat tanlanmaganda ko'rsatiladigan tushuntirish
+   ============================================================ */
+.chat-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.ph-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ph-sub {
+  font-size: 13px;
+  line-height: 1.55;
+  max-width: 380px;
+}
+
+.ph-hints {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.ph-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border: 1px solid var(--divider);
+  border-radius: 999px;
+  background: var(--sidebar-bg);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.ph-hint:hover {
+  background: var(--hover);
+}
+
+/* ============================================================
+   Lotus AI — javob kutilayotgani va xato holati
+   ============================================================ */
+@keyframes lotus-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+.lotus-typing {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 12px 14px;
+}
+
+.tdot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  animation: lotus-dot 1.2s ease-in-out infinite;
+}
+
+.tdot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.tdot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.lotus-bubble.error {
+  background: color-mix(in srgb, var(--danger) 14%, var(--bubble-in));
+  color: var(--bubble-in-text);
+}
+
+/* Yuborish tugmasi bloklanganda */
+.btn.send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Bo'lim sarlavhasi ostidagi qisqa izoh */
+.pane-desc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin-top: -4px;
+  margin-bottom: 2px;
+}
+
+/* Maydon ostidagi qisqa ko'rsatma (masalan raqam formati) */
+.field-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: left;
+  align-self: stretch;
+}

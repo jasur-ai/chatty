@@ -1,10 +1,24 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api";
 import { IconBack, IconLock, IconPhone, IconShield, IconSpinner } from "../icons";
 import { useStore } from "../store";
 import type { LoginResult } from "../types";
 
 type Step = "terms" | "phone" | "code" | "password";
+
+/** Telegram O'zbekiston raqamlari: +998 va 9 xona. */
+export function normalizePhone(raw: string) {
+  return raw.replace(/[^\d+]/g, "");
+}
+
+export function phoneProblem(v: string): string {
+  const d = v.replace(/\D/g, "");
+  if (!d) return "";
+  if (!d.startsWith("998")) return "Raqam 998 bilan boshlanishi kerak";
+  if (d.length < 12) return `Yana ${12 - d.length} ta raqam kerak`;
+  if (d.length > 12) return "Raqam juda uzun";
+  return "";
+}
 
 const TERMS = [
   { title: "Akkaunt ulash", text: "Chatty sizning Telegram akkauntingizni MTProto orqali xavfsiz ulaydi. Ulash uchun telefon raqamingiz, tasdiqlash kodi va 2FA paroli talab qilinadi." },
@@ -23,6 +37,15 @@ export function Login() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [via, setVia] = useState<string | null>(null);
+  // Telegram kod so'rovlarini cheklaydi: 30 soniyada bir marta, soatiga 5 marta.
+  // Shuning uchun qayta yuborish tugmasida qancha kutish kerakligini ko'rsatamiz.
+  const [wait, setWait] = useState(0);
+
+  useEffect(() => {
+    if (wait <= 0) return;
+    const t = setTimeout(() => setWait((w) => w - 1), 1000);
+    return () => clearTimeout(t);
+  }, [wait]);
 
   async function doStart() {
     setBusy(true);
@@ -30,7 +53,22 @@ export function Login() {
     try {
       const r = await api.startLogin(phone.trim());
       setVia(r.via ?? null);
+      setWait(30);
       setStep("code");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resend() {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await api.startLogin(phone.trim());
+      setVia(r.via ?? null);
+      setWait(30);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -112,11 +150,16 @@ export function Login() {
               placeholder="+998901234567"
               value={phone}
               autoFocus
-              onChange={(e) => setPhone(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && doStart()}
+              onChange={(e) => setPhone(normalizePhone(e.target.value))}
+              onKeyDown={(e) => e.key === "Enter" && !phoneProblem(phone) && doStart()}
             />
+            {phoneProblem(phone) && <div className="field-hint">{phoneProblem(phone)}</div>}
             {error && <div className="error">{error}</div>}
-            <button className="btn primary" disabled={busy || phone.trim().length < 5} onClick={doStart}>
+            <button
+              className="btn primary"
+              disabled={busy || !!phoneProblem(phone) || phone.replace(/\D/g, "").length !== 12}
+              onClick={doStart}
+            >
               {busy ? <IconSpinner size={18} /> : "Kod yuborish"}
             </button>
             <button className="btn ghost" onClick={() => setStep("terms")}>
@@ -157,15 +200,27 @@ export function Login() {
               className="input"
               type="text"
               inputMode="numeric"
-              placeholder="Kod"
+              placeholder="5 xonali kod"
+              maxLength={8}
               value={code}
               autoFocus
-              onChange={(e) => setCode(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && doVerify()}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+              onKeyDown={(e) => e.key === "Enter" && code.trim().length >= 5 && doVerify()}
             />
+            {code.trim().length > 0 && code.trim().length < 5 && (
+              <div className="field-hint">Kod {code.trim().length}/5 xona</div>
+            )}
             {error && <div className="error">{error}</div>}
-            <button className="btn primary" disabled={busy || code.trim().length < 4} onClick={doVerify}>
+            <button className="btn primary" disabled={busy || code.trim().length < 5} onClick={doVerify}>
               {busy ? <IconSpinner size={18} /> : "Tasdiqlash"}
+            </button>
+            <button
+              className="btn ghost"
+              disabled={busy || wait > 0}
+              onClick={resend}
+              title="Kodni qayta yuborish"
+            >
+              {busy ? <IconSpinner size={16} /> : wait > 0 ? `Qayta yuborish (${wait}s)` : "Kodni qayta yuborish"}
             </button>
             <button className="btn ghost" onClick={() => setStep("phone")}>
               <IconBack size={16} /> Orqaga

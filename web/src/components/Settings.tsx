@@ -399,6 +399,7 @@ function ProTab() {
   return (
     <div className="settings-pane">
       <div className="pane-sub">Rejalashtirilgan xabarlar</div>
+      <div className="pane-desc">Xabarni oldindan tayyorlab, belgilangan vaqtda yuborish.</div>
       <div className="target-add">
         <select className="input" value={schedDialog} onChange={(e) => setSchedDialog(Number(e.target.value))}>
           <option value={0}>Chat tanlang</option>
@@ -422,6 +423,7 @@ function ProTab() {
       {scheduled.length === 0 && <div className="muted">Rejalashtirilgan xabar yo'q</div>}
 
       <div className="pane-sub">Qidiruv (barcha chatlar)</div>
+      <div className="pane-desc">Barcha chatlardagi xabarlar bo'yicha qidirish.</div>
       <div className="composer-mini">
         <input className="input" placeholder="Qidiruv..." value={searchQ} onChange={(e) => setSearchQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void doSearch()} />
         <button className="btn primary" onClick={() => void doSearch()}>Qidirish</button>
@@ -437,6 +439,7 @@ function ProTab() {
       ))}
 
       <div className="pane-sub">Analitika</div>
+      <div className="pane-desc">Xabarlar soni va faollik bo'yicha qisqa hisobot.</div>
       {analytics && (
         <div className="analytics-grid">
           <div className="stat"><b>{analytics.total_messages}</b><span>jami xabar</span></div>
@@ -447,6 +450,7 @@ function ProTab() {
       )}
 
       <div className="pane-sub">Eksport va zaxira</div>
+      <div className="pane-desc">Chatlarni faylga saqlab olish.</div>
       <div className="pane-row">
         <select className="input" value={schedDialog} onChange={(e) => setSchedDialog(Number(e.target.value))}>
           <option value={0}>Chat tanlang (eksport)</option>
@@ -460,6 +464,7 @@ function ProTab() {
       </div>
 
       <div className="pane-sub">Avto-o'chirish (yuborilgan xabarlar)</div>
+      <div className="pane-desc">Yuborilgan xabarlar belgilangan vaqtdan keyin avtomatik o'chadi.</div>
       <div className="seg">
         {[{ v: 0, l: "O'chiq" }, { v: 3600, l: "1 soat" }, { v: 86400, l: "24 soat" }, { v: 604800, l: "7 kun" }].map((o) => (
           <button key={o.v} className={`seg-btn ${ttl === o.v ? "active" : ""}`} onClick={() => void setAutoDelete(o.v)}>{o.l}</button>
@@ -545,6 +550,7 @@ function LotusTab() {
       </div>
 
       <div className="pane-sub">Eslatmalar</div>
+      <div className="pane-desc">O'zingiz uchun eslatma — faqat siz ko'rasiz.</div>
       {reminders.map((r) => (
         <div className="target-item" key={r.id}>
           <span>{r.text}</span>
@@ -597,6 +603,7 @@ function MusicTab() {
       {isAdmin && (
         <>
           <div className="pane-sub">Musiqa taklifi qo'shish</div>
+      <div className="pane-desc">Admin qo'shishi uchun qo'shiq taklif qilish.</div>
           <label className="field"><span>Nomi</span><input className="input" value={title} onChange={(e) => setTitle(e.target.value)} /></label>
           <label className="field"><span>Ijrochi</span><input className="input" value={performer} onChange={(e) => setPerformer(e.target.value)} /></label>
           <label className="field"><span>Izoh</span><input className="input" value={caption} onChange={(e) => setCaption(e.target.value)} /></label>
@@ -606,6 +613,7 @@ function MusicTab() {
       )}
 
       <div className="pane-sub">Takliflar</div>
+      <div className="pane-desc">Foydalanuvchilar qoldirgan takliflar ro'yxati.</div>
       {music.length === 0 && <div className="muted">Hozircha musiqa taklifi yo'q</div>}
       {music.map((p) => (
         <div className="music-card" key={p.id}>
@@ -699,6 +707,7 @@ function VipTab() {
   return (
     <div className="settings-pane">
       <div className="pane-sub">Shaxsiy mavzu</div>
+      <div className="pane-desc">Ilova rangini o'zingizga moslashtirish.</div>
       <div className="pane-row">
         {["#3390ec", "#f06292", "#7c4dff", "#00b894", "#e17055", "#00a8ff"].map((c) => (
           <button
@@ -711,6 +720,7 @@ function VipTab() {
       </div>
 
       <div className="pane-sub">Tezkor javoblar</div>
+      <div className="pane-desc">Tez-tez ishlatadigan javobni saqlab, bir bosishda yuborish.</div>
       <div className="target-add">
         <input className="input" placeholder="Yorliq" value={qrLabel} onChange={(e) => setQrLabel(e.target.value)} />
         <input className="input" placeholder="Matn" value={qrText} onChange={(e) => setQrText(e.target.value)} />
@@ -727,6 +737,7 @@ function VipTab() {
       ))}
 
       <div className="pane-sub">Avto-forward qoidalari</div>
+      <div className="pane-desc">Kalit so'z bo'yicha xabarlarni boshqa chatga avtomatik uzatish.</div>
       <div className="target-add">
         <input className="input" placeholder="Kalit so'z" value={afKeyword} onChange={(e) => setAfKeyword(e.target.value)} />
         <select className="input" value={afTarget} onChange={(e) => setAfTarget(Number(e.target.value))}>
@@ -757,6 +768,7 @@ function VipTab() {
       {starred.length === 0 && <div className="muted">Yulduzchalangan xabar yo'q (xabardagi yulduzcha tugmasi bilan qo'shiladi)</div>}
 
       <div className="pane-sub">Profil tahriri</div>
+      <div className="pane-desc">Telegram profilingizdagi ism, username va bio.</div>
       <div className="target-add">
         <input className="input" placeholder="Username (yangi)" value={username} onChange={(e) => setUsername(e.target.value)} />
         <input className="input" placeholder="Bio" value={bio} onChange={(e) => setBio(e.target.value)} />
@@ -766,12 +778,14 @@ function VipTab() {
       </div>
 
       <div className="pane-sub">Kontaktlar</div>
+      <div className="pane-desc">Telegram kontaktlaringiz ro'yxati.</div>
       <button className="btn ghost" onClick={() => void run(() => api.vipContacts(current!.id, token!).then((r) => setContacts(r.contacts)), "Yuklandi")}>
         Kontaktlarni yuklash
       </button>
       {contacts.length > 0 && <div className="muted">{contacts.length} ta kontakt</div>}
 
       <div className="pane-sub">O'qish hisoboti (✓/✓✓)</div>
+      <div className="pane-desc">Yuborilgan xabarlarning nechatasi o'qilganini ko'rish.</div>
       <div className="target-add">
         <select className="input" value={receiptsDialog} onChange={(e) => setReceiptsDialog(Number(e.target.value))}>
           <option value={0}>Chat</option>
@@ -790,6 +804,7 @@ function VipTab() {
       )}
 
       <div className="pane-sub">Media galereya</div>
+      <div className="pane-desc">Tanlangan chatdagi barcha rasm, video va fayllar.</div>
       <div className="target-add">
         <select className="input" value={mediaDialog} onChange={(e) => setMediaDialog(Number(e.target.value))}>
           <option value={0}>Chat</option>
@@ -802,6 +817,7 @@ function VipTab() {
       {media.length > 0 && <div className="muted">{media.length} ta media</div>}
 
       <div className="pane-sub">Stiker/GIF (emoji)</div>
+      <div className="pane-desc">Emoji kodi bo'yicha stiker yoki GIF yuborish.</div>
       <div className="target-add">
         <select className="input" value={stickerDialog} onChange={(e) => setStickerDialog(Number(e.target.value))}>
           <option value={0}>Chat</option>
@@ -814,6 +830,7 @@ function VipTab() {
       </div>
 
       <div className="pane-sub">Kanalga rejalashtirilgan post</div>
+      <div className="pane-desc">Postni oldindan tayyorlab, belgilangan vaqtda kanalda chiqarish.</div>
       <div className="target-add">
         <select className="input" value={chanDialog} onChange={(e) => setChanDialog(Number(e.target.value))}>
           <option value={0}>Kanal</option>
