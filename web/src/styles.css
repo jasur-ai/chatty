@@ -2452,3 +2452,236 @@ textarea {
   font-size: 12px;
   color: var(--danger, #e53935);
 }
+
+/* ============================================================
+   Guruh / kanal boshqaruvi paneli
+   ============================================================ */
+.ga {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ga-card {
+  background: var(--sidebar-bg);
+  border: 1px solid var(--divider);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ga-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.ga-num {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.ga-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ga-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ga-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.ga-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ga-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ga-row > .input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.ga-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+/* Holat banneri */
+.ga-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  background: var(--hover);
+  color: var(--text);
+}
+
+.ga-status.ok {
+  background: color-mix(in srgb, var(--tick) 16%, transparent);
+  color: var(--text);
+}
+
+.ga-status.err {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--text);
+}
+
+/* Tanlangan obyekt chipi */
+.ga-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--active);
+  border-radius: 999px;
+  padding: 6px 8px 6px 12px;
+  font-size: 13px;
+  color: var(--text);
+  max-width: 100%;
+}
+
+.ga-pick button {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+}
+
+.ga-pick button:hover {
+  color: var(--text);
+}
+
+/* A'zolar ro'yxati */
+.ga-list {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+}
+
+.ga-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.ga-item + .ga-item {
+  border-top: 1px solid var(--divider);
+}
+
+.ga-item:hover {
+  background: var(--hover);
+}
+
+.ga-item.active {
+  background: var(--active);
+}
+
+.ga-item-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.ga-item-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Huquq belgilari */
+.ga-rights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ga-right {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--hover);
+  color: var(--text-secondary);
+}
+
+.ga-right.on {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text);
+}
+
+/* So'rovnoma variantlari */
+.ga-opt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ga-opt .input {
+  flex: 1;
+}
+
+.ga-opt-idx {
+  flex: 0 0 auto;
+  width: 20px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.ga-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text);
+  word-break: break-all;
+}

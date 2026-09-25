@@ -648,18 +648,10 @@ function VipTab() {
   const [afKeyword, setAfKeyword] = useState("");
   const [afTarget, setAfTarget] = useState(0);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [members, setMembers] = useState<Contact[]>([]);
-  const [membersDialog, setMembersDialog] = useState(0);
   const [receipts, setReceipts] = useState<{ sent: number; read: number; delivered_not_read: number; read_rate: number } | null>(null);
   const [receiptsDialog, setReceiptsDialog] = useState(0);
   const [media, setMedia] = useState<{ tg_id: number; media_type: string; date: string }[]>([]);
   const [mediaDialog, setMediaDialog] = useState(0);
-  const [groupAction, setGroupAction] = useState("kick");
-  const [groupUserId, setGroupUserId] = useState("");
-  const [groupDialog, setGroupDialog] = useState(0);
-  const [pollQ, setPollQ] = useState("");
-  const [pollOpts, setPollOpts] = useState("");
-  const [pollDialog, setPollDialog] = useState(0);
   const [sticker, setSticker] = useState("");
   const [stickerDialog, setStickerDialog] = useState(0);
   const [bio, setBio] = useState("");
@@ -773,33 +765,6 @@ function VipTab() {
         </button>
       </div>
 
-      <div className="pane-sub">Guruh boshqaruvi</div>
-      <div className="target-add">
-        <select className="input" value={groupDialog} onChange={(e) => setGroupDialog(Number(e.target.value))}>
-          <option value={0}>Guruh</option>
-          {dialogs.filter((d) => d.type !== "user").map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
-        </select>
-        <select className="input" value={groupAction} onChange={(e) => setGroupAction(e.target.value)}>
-          {["kick", "ban", "unban", "promote", "demote"].map((a) => <option key={a} value={a}>{a}</option>)}
-        </select>
-        <input className="input" placeholder="User ID" value={groupUserId} onChange={(e) => setGroupUserId(e.target.value)} />
-        <button className="btn primary" onClick={() => void run(() => api.vipGroupManage(current!.id, { dialog_id: groupDialog, user_id: Number(groupUserId), action: groupAction }, token!))}>
-          Bajarish
-        </button>
-      </div>
-
-      <div className="pane-sub">Guruh a'zolari</div>
-      <div className="target-add">
-        <select className="input" value={membersDialog} onChange={(e) => setMembersDialog(Number(e.target.value))}>
-          <option value={0}>Guruh</option>
-          {dialogs.filter((d) => d.type !== "user").map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
-        </select>
-        <button className="btn primary" onClick={() => void run(() => api.vipMembers(current!.id, membersDialog, token!).then((r) => setMembers(r.members)), "Yuklandi")}>
-          Ro'yxat
-        </button>
-      </div>
-      {members.length > 0 && <div className="muted">{members.length} ta a'zo</div>}
-
       <div className="pane-sub">Kontaktlar</div>
       <button className="btn ghost" onClick={() => void run(() => api.vipContacts(current!.id, token!).then((r) => setContacts(r.contacts)), "Yuklandi")}>
         Kontaktlarni yuklash
@@ -835,19 +800,6 @@ function VipTab() {
         </button>
       </div>
       {media.length > 0 && <div className="muted">{media.length} ta media</div>}
-
-      <div className="pane-sub">So'rov (poll)</div>
-      <div className="target-add">
-        <select className="input" value={pollDialog} onChange={(e) => setPollDialog(Number(e.target.value))}>
-          <option value={0}>Chat</option>
-          {dialogs.filter((d) => d.type !== "user").map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
-        </select>
-        <input className="input" placeholder="Savol" value={pollQ} onChange={(e) => setPollQ(e.target.value)} />
-        <input className="input" placeholder="Variantlar (vergul bilan)" value={pollOpts} onChange={(e) => setPollOpts(e.target.value)} />
-        <button className="btn primary" onClick={() => void run(() => api.vipPoll(current!.id, pollDialog, pollQ, pollOpts.split(",").map((s) => s.trim()).filter(Boolean), token!))}>
-          Yaratish
-        </button>
-      </div>
 
       <div className="pane-sub">Stiker/GIF (emoji)</div>
       <div className="target-add">
