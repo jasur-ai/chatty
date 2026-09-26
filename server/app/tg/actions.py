@@ -891,7 +891,12 @@ async def update_profile(account_id: int, *, first_name: str | None = None, bio:
 
 
 async def group_manage(account_id: int, dialog_id: int, user_id: int, action: str, title: str | None = None) -> dict:
-    """Guruh boshqaruvi: kick | ban | unban | promote | demote | set_title | rename."""
+    """Guruh boshqaruvi.
+
+    A'zo bo'yicha: kick | ban | unban | promote | demote | mute | unmute | restrict
+    Guruh bo'yicha: set_title (nom) | set_about | slowmode | delete_user_msgs
+    Admin bo'yicha: set_admin_title (lavozim)
+    """
     client = await _require_client(account_id)
     async with SessionLocal() as db:
         dialog = (
@@ -900,20 +905,42 @@ async def group_manage(account_id: int, dialog_id: int, user_id: int, action: st
         if dialog is None:
             raise ValueError("Dialog topilmadi")
         entity = await client.get_entity(input_peer(dialog.tg_id, dialog.peer_type))
+        # A'zoga oid amallar uchun ID'ni bir marta hal qilamiz (keshda bo'lmasa
+        # guruh ro'yxatidan topiladi).
+        member = None
+        if action in {
+            "kick", "ban", "unban", "promote", "demote",
+            "set_admin_title", "restrict", "mute", "unmute", "delete_user_msgs",
+        }:
+            member = await _resolve_member(client, entity, user_id)
+
         if action == "kick":
-            await client.kick_participant(entity, user_id)
+            await client.kick_participant(entity, member)
         elif action == "ban":
-            await client.edit_permissions(entity, user_id, view_messages=False)
+            await client.edit_permissions(entity, member, view_messages=False)
         elif action == "unban":
-            await client.edit_permissions(entity, user_id, view_messages=True)
+            await client.edit_permissions(entity, member, view_messages=True)
         elif action == "promote":
-            await client.edit_admin(entity, user_id, post_messages=True, edit_messages=True, delete_messages=True, ban_users=True)
+            # `is_admin=True` barcha huquqlarni beradi (Telethon hujjatiga ko'ra).
+            # Alohida huquqlarni sanab chiqish qolganini False'ga tushirardi.
+            # DIQQAT: edit_admin'da manage_topics parametri YO'Q.
+            await client.edit_admin(entity, member, is_admin=True, add_admins=False)
         elif action == "demote":
-            await client.edit_admin(entity, user_id, is_admin=False)
+            await client.edit_admin(entity, member, is_admin=False)
         elif action == "set_title":
-            await client.edit_admin(entity, user_id, title=title or "")
+            # Guruh/kanal NOMINI o'zgartirish.
+            # DIQQAT: edit_admin(..., title=...) admin LAVOZIMINI o'zgartiradi,
+            # guruh nomini emas — buning uchun alohida set_admin_title bor.
+            # Telethon'da client.edit_title YO'Q — to'g'ridan-to'g'ri MTProto.
+            await _set_chat_title(client, entity, (title or "").strip())
+        elif action == "set_admin_title":
+            # Admin'ning lavozimi (rank), masalan "Moderator".
+            # DIQQAT: client.edit_admin(..., title=...) boshqa huquqlarni
+            # False'ga tushirib, admin'ni lavozimidan mahrum qiladi. Shuning
+            # uchun avval joriy huquqlarni o'qib, o'shalar bilan qayta yozamiz.
+            await _set_admin_rank(client, entity, member, (title or "").strip()[:16])
         elif action == "rename":
-            await client.edit_title(entity, title or "")
+            await _set_chat_title(client, entity, (title or "").strip())
         # ---- yangi amallar ----
         elif action == "set_about":
             # Guruh/kanal tavsifi. Telethon'da bitta funksiya ikkalasiga ham
@@ -928,25 +955,26 @@ async def group_manage(account_id: int, dialog_id: int, user_id: int, action: st
         elif action == "restrict":
             # title = vergul bilan ajratilgan cheklovlar: "media,stickers,preview"
             flags = {f.strip().lower() for f in (title or "").split(",") if f.strip()}
+            # DIQQAT: parametr nomi embed_link_previews (embed_links EMAS).
             await client.edit_permissions(
                 entity,
-                user_id,
+                member,
                 send_media="media" not in flags,
                 send_stickers="stickers" not in flags,
                 send_gifs="stickers" not in flags,
-                embed_links="preview" not in flags,
+                embed_link_previews="preview" not in flags,
             )
         elif action == "mute":
             # title = soatlar soni (default 24)
             hours = float(title or 24)
             until = datetime.now(timezone.utc) + timedelta(hours=hours)
-            await client.edit_permissions(entity, user_id, until_date=until, send_messages=False)
+            await client.edit_permissions(entity, member, until_date=until, send_messages=False)
         elif action == "unmute":
-            await client.edit_permissions(entity, user_id, send_messages=True)
+            await client.edit_permissions(entity, member, send_messages=True)
         elif action == "delete_user_msgs":
             n = int(title or 20) if str(title or "").isdigit() else 20
             ids = []
-            async for m in client.iter_messages(entity, limit=500, from_user=user_id):
+            async for m in client.iter_messages(entity, limit=500, from_user=member):
                 ids.append(m.id)
                 if len(ids) >= n:
                     break
@@ -956,6 +984,87 @@ async def group_manage(account_id: int, dialog_id: int, user_id: int, action: st
         else:
             raise ValueError("Noto'g'ri amal")
     return {"ok": True}
+
+
+async def _resolve_member(client, entity, user_id: int):
+    """Raqamli user_id'ni ishlaydigan input peer'ga aylantiradi.
+
+    Telethon faqat sessiya keshidagi entity'larni xom ID orqali topa oladi.
+    Guruh a'zosi keshda bo'lmasa `Could not find the input entity` chiqadi —
+    shuning uchun avval keshdan, bo'lmasa guruh ishtirokchilari ro'yxatidan
+    (access_hash bilan birga) qidiramiz.
+    """
+    from telethon.tl.types import PeerUser
+
+    try:
+        return await client.get_input_entity(PeerUser(int(user_id)))
+    except Exception:
+        pass
+
+    async for p in client.iter_participants(entity):
+        if int(p.id) == int(user_id):
+            return await client.get_input_entity(p)
+
+    raise ValueError(
+        "Foydalanuvchi topilmadi — u guruh a'zosi bo'lmasligi mumkin"
+    )
+
+
+async def _set_admin_rank(client, entity, member, rank: str) -> None:
+    """Admin lavozimini (rank) o'zgartiradi, MAVJUD huquqlarni saqlagan holda.
+
+    `client.edit_admin(user, title=...)` ko'rsatilmagan barcha huquqlarni
+    False qilib qo'yadi — natijada admin umuman lavozimidan ayriladi.
+    Shuning uchun joriy `ChatAdminRights` o'qilib, o'sha bilan qayta yoziladi.
+    """
+    from telethon.tl.functions.channels import EditAdminRequest
+    from telethon.tl.types import ChatAdminRights, InputPeerChannel
+
+    peer = await client.get_input_entity(entity)
+    if not isinstance(peer, InputPeerChannel):
+        raise ValueError("Lavozimni faqat guruh/kanalda o'zgartirish mumkin")
+
+    current = None
+    async for p in client.iter_participants(entity, filter=None):
+        if int(p.id) == int(member.user_id):
+            current = getattr(getattr(p, "participant", None), "admin_rights", None)
+            break
+
+    rights = current or ChatAdminRights(
+        change_info=True,
+        delete_messages=True,
+        ban_users=True,
+        invite_users=True,
+        pin_messages=True,
+    )
+    await client(EditAdminRequest(channel=peer, user_id=member, admin_rights=rights, rank=rank))
+
+
+async def _set_chat_title(client, entity, title: str) -> None:
+    """Guruh/kanal nomini o'zgartirish.
+
+    Telethon'da `client.edit_title` metodi YO'Q, shuning uchun to'g'ridan-to'g'ri
+    MTProto chaqiruvi ishlatiladi:
+      - megaguruh/kanal  -> channels.EditTitleRequest(channel, title)
+      - oddiy chat       -> messages.EditChatTitleRequest(chat_id, title)
+
+    `get_input_entity` PeerChannel emas, InputPeerChannel qaytaradi.
+    """
+    from telethon.tl.functions.channels import EditTitleRequest
+    from telethon.tl.functions.messages import EditChatTitleRequest
+    from telethon.tl.types import InputPeerChannel, InputPeerChat
+
+    new_title = (title or "").strip()[:128]
+    if not new_title:
+        raise ValueError("Yangi nom bo'sh bo'lmasligi kerak")
+
+    peer = await client.get_input_entity(entity)
+    if isinstance(peer, InputPeerChannel):
+        await client(EditTitleRequest(channel=peer, title=new_title))
+    elif isinstance(peer, InputPeerChat):
+        await client(EditChatTitleRequest(chat_id=peer.chat_id, title=new_title))
+    else:
+        raise ValueError("Bu chat turi nomini o'zgartirib bo'lmaydi")
 
 
 async def _set_slowmode(client, entity, seconds: int) -> None:
@@ -1087,17 +1196,48 @@ async def _resolve_dialog(client, db, account_id: int, dialog_id: int):
 async def _require_admin_rights(client, entity) -> None:
     """Akkaunt shu guruh/kanalda admin ekanini tekshiradi.
 
-    Admin bo'lmasa Telegram xatosi chiqadi — foydalanuvchiga tushunarli
-    xabar qaytarish uchun oldindan tekshiramiz.
+    Admin bo'lmasa ValueError qaytaradi — foydalanuvchiga tushunarli xabar
+    berish uchun.
+
+    MUHIM: tekshiruv "fail-closed" bo'lishi kerak. Avvalgi versiya har qanday
+    xatoda jim qaytar edi, ya'ni vaqtinchalik xato yuz bersa akkaunt admin
+    deb hisoblanib, admin bo'lmagan chatlarga ham xabar yuborilar edi.
     """
     from telethon.tl.functions.channels import GetParticipantRequest
+    from telethon.tl.functions.messages import GetFullChatRequest
+    from telethon.tl.types import ChatAdminRights, InputPeerChat
+
+    peer = await client.get_input_entity(entity)
+
+    # Oddiy (megaguruh bo'lmagan) chat — adminlik boshqacha aniqlanadi.
+    if isinstance(peer, InputPeerChat):
+        try:
+            full = await client(GetFullChatRequest(chat_id=peer.chat_id))
+        except Exception as e:  # noqa: BLE001
+            raise ValueError("Guruh haqidagi ma'lumotni olib bo'lmadi") from e
+        # Kirish cheklangan guruhda participants = ChatParticipantsForbidden
+        # bo'ladi va uning .participants atributi YO'Q.
+        me_id = int((await client.get_me()).id)
+        parts_obj = getattr(getattr(full, "full_chat", None), "participants", None)
+        members = getattr(parts_obj, "participants", None) or []
+        for p in members:
+            if int(p.user_id) != me_id:
+                continue
+            if isinstance(getattr(p, "admin_rights", None), ChatAdminRights) or p.__class__.__name__ in {
+                "ChatParticipantAdmin",
+                "ChatParticipantCreator",
+            }:
+                return
+        raise ValueError("Bu guruhda akkaunt admin emas. Avval admin qiling.")
 
     try:
-        me = await client.get_me()
-        part = await client(GetParticipantRequest(channel=entity, participant=me))
-    except Exception as e:  # noqa: BLE001 — oddiy guruh (chat) bo'lsa admin tekshirilmaydi
-        log.debug("Admin tekshiruvi o'tkazib yuborildi: %s", e)
-        return
+        part = await client(
+            GetParticipantRequest(channel=peer, participant=await client.get_me())
+        )
+    except Exception as e:  # noqa: BLE001
+        # Jim qaytmaymiz — aks holda admin bo'lmagan chatga xabar ketadi.
+        raise ValueError("Admin huquqini tekshirib bo'lmadi. Qayta urinib ko'ring.") from e
+
     rights = getattr(getattr(part, "participant", None), "admin_rights", None)
     if rights is None:
         raise ValueError("Bu guruh/kanalda akkaunt admin emas. Avval admin qiling.")
@@ -1319,8 +1459,14 @@ async def broadcast_to_admin_chats(
         ).scalars().all()
 
     sent, skipped, errors = 0, 0, []
+    kind_filter = (only_kind or "").strip().lower()
     for d in rows:
-        if only_kind and d.peer_type != only_kind:
+        # DIQQAT: peer_type megaguruhlar uchun ham "channel" bo'ladi, shuning
+        # uchun "group"/"channel" ajratish uchun `kind` ustunidan foydalanamiz.
+        if kind_filter and (d.kind or "") != kind_filter:
+            continue
+        # Shaxsiy chat va botlarga ommaviy xabar yuborilmaydi.
+        if d.peer_type == "user":
             continue
         if sent >= limit_dialogs:
             break
@@ -1339,4 +1485,12 @@ async def broadcast_to_admin_chats(
             await asyncio.sleep(2.5)  # spam filtri urilmasligi uchun
         except Exception as e:  # noqa: BLE001
             errors.append(f"{d.title}: {e}")
-    return {"ok": True, "sent": sent, "skipped_not_admin": skipped, "errors": errors[:10]}
+    return {
+        "ok": True,
+        "sent": sent,
+        # Frontend `failed` va `total` maydonlarini kutadi.
+        "failed": len(errors),
+        "total": sent + len(errors),
+        "skipped_not_admin": skipped,
+        "errors": errors[:10],
+    }
